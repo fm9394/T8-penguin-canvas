@@ -8,6 +8,8 @@ import {
   ReactFlowProvider,
   SelectionMode,
   ViewportPortal,
+  Handle,
+  Position,
   addEdge,
   applyEdgeChanges,
   applyNodeChanges,
@@ -144,6 +146,18 @@ const nodeTypes = NODE_REGISTRY.reduce<Record<string, any>>((acc, m) => {
 }, {});
 // 节点组容器(不在 NODE_REGISTRY 中,作为独立的视觉容器节点类型)
 nodeTypes.groupBox = GroupBoxNode;
+
+// SHIFT 批量移线 phantom 节点: 拖拽期间充当边的临时锐点,跟随鼠标移动
+function BulkPhantomNode() {
+  return (
+    <>
+      <Handle type="target" position={Position.Left} style={{ opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, border: 'none', background: 'transparent' }} />
+      <Handle type="source" position={Position.Right} style={{ opacity: 0, width: 1, height: 1, minWidth: 0, minHeight: 0, border: 'none', background: 'transparent' }} />
+    </>
+  );
+}
+nodeTypes.bulkPhantom = BulkPhantomNode;
+const BULK_PHANTOM_ID = '__bulk_phantom__';
 
 interface CanvasInnerProps {
   onAddNodeRef?: React.MutableRefObject<((type: NodeType) => void) | null>;
@@ -283,16 +297,21 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   // 自动保存(防抖 800ms,防空数据覆盖)
   useEffect(() => {
     if (!activeId || !loaded) return;
-    const snapshot = JSON.stringify({ nodes, edges });
+    // 过滤 SHIFT 批量移线拖拽过程中的 phantom 节点与重定向边(不作为持久化快照)
+    const persistNodes = nodes.filter((n) => n.id !== BULK_PHANTOM_ID);
+    const persistEdges = edges.filter(
+      (ed) => ed.source !== BULK_PHANTOM_ID && ed.target !== BULK_PHANTOM_ID
+    );
+    const snapshot = JSON.stringify({ nodes: persistNodes, edges: persistEdges });
     if (snapshot === lastSavedRef.current) return;
-    if (nodes.length === 0 && lastSavedRef.current !== '' && JSON.parse(lastSavedRef.current).nodes?.length > 0) {
+    if (persistNodes.length === 0 && lastSavedRef.current !== '' && JSON.parse(lastSavedRef.current).nodes?.length > 0) {
       // 防止空数据覆盖
       return;
     }
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(async () => {
       try {
-        await api.saveCanvasData(activeId, { nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } });
+        await api.saveCanvasData(activeId, { nodes: persistNodes, edges: persistEdges, viewport: { x: 0, y: 0, zoom: 1 } });
         lastSavedRef.current = snapshot;
       } catch (e) {
         console.error('保存画布失败', e);
@@ -1056,7 +1075,25 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   // 原因: ReactFlow 的 multiSelectionKeyCode 包含 'Shift'，导致按住 SHIFT 在 handle 上 mousedown
   // 会被 ReactFlow 拦截为多选事件，onConnectStart 可能不会触发。
   // 这里使用 capture 阶段全局拦截 + stopImmediatePropagation 完全接管该交互。
+  // 交互升级: 拖拽期间使用 phantom 节点作为边的临时锐点,让所有连线跟随鼠标移动。
   useEffect(() => {
+    // SHIFT 键状态 → body.shift-mode (光标提示)
+    const onShiftDown = (kev: KeyboardEvent) => {
+      if (kev.key === 'Shift' && !document.body.classList.contains('shift-mode')) {
+        document.body.classList.add('shift-mode');
+      }
+    };
+    const onShiftUp = (kev: KeyboardEvent) => {
+      if (kev.key === 'Shift') {
+        document.body.classList.remove('shift-mode');
+      }
+    };
+    window.addEventListener('keydown', onShiftDown);
+    window.addEventListener('keyup', onShiftUp);
+    // 失焦时也清除
+    const onBlur = () => document.body.classList.remove('shift-mode');
+    window.addEventListener('blur', onBlur);
+
     const onMouseDownCapture = (e: MouseEvent) => {
       if (!e.shiftKey) return;
       if (e.button !== 0) return; // 仅左键
@@ -1072,19 +1109,17 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       if (!nodeId) return;
 
       // 判断 handle 类型：data-handlepos / class / data-handletype 多重兑底
-      let handleType: 'source' | 'target' | null = null;
-      const dt = handleEl.getAttribute('data-handletype');
-      if (dt === 'target' || dt === 'source') {
-        handleType = dt;
-      } else if (handleEl.classList.contains('react-flow__handle-left')) {
-        handleType = 'target';
-      } else if (handleEl.classList.contains('react-flow__handle-right')) {
-        handleType = 'source';
-      } else {
-        const pos = handleEl.getAttribute('data-handlepos');
-        if (pos === 'left' || pos === 'top') handleType = 'target';
-        else if (pos === 'right' || pos === 'bottom') handleType = 'source';
-      }
+      const detectHandleType = (el: HTMLElement): 'source' | 'target' | null => {
+        const dt = el.getAttribute('data-handletype');
+        if (dt === 'target' || dt === 'source') return dt;
+        if (el.classList.contains('react-flow__handle-left')) return 'target';
+        if (el.classList.contains('react-flow__handle-right')) return 'source';
+        const pos = el.getAttribute('data-handlepos');
+        if (pos === 'left' || pos === 'top') return 'target';
+        if (pos === 'right' || pos === 'bottom') return 'source';
+        return null;
+      };
+      const handleType = detectHandleType(handleEl);
       if (!handleType) return;
 
       // 收集相关边
@@ -1104,30 +1139,82 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       const stashed: Edge[] = JSON.parse(JSON.stringify(relatedEdges));
       const stashedIds = new Set(stashed.map((ed) => ed.id));
 
-      // 进入拖拽状态: 从画布中暂时隐藏这些边(以免视觉干扰)
-      // （如果释放在空白会复原）
+      // 初始 phantom 位置 (flow 坐标)
+      const initFlowPos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+
+      // 1) 创建 phantom 节点
+      setNodes((ns) => {
+        // 避免重复创建
+        if (ns.some((n) => n.id === BULK_PHANTOM_ID)) return ns;
+        return [
+          ...ns,
+          {
+            id: BULK_PHANTOM_ID,
+            type: 'bulkPhantom',
+            position: initFlowPos,
+            data: {},
+            draggable: false,
+            selectable: false,
+            deletable: false,
+            zIndex: 9999,
+          } as Node,
+        ];
+      });
+
+      // 2) 重定向 stashed 边的 target/source 到 phantom，让边实时跟随 phantom 移动
       setEdges((eds) =>
-        eds.map((ed) =>
-          stashedIds.has(ed.id)
-            ? { ...ed, hidden: true }
-            : ed
-        )
+        eds.map((ed) => {
+          if (!stashedIds.has(ed.id)) return ed;
+          if (startHandleType === 'target') {
+            return { ...ed, target: BULK_PHANTOM_ID, targetHandle: null };
+          } else {
+            return { ...ed, source: BULK_PHANTOM_ID, sourceHandle: null };
+          }
+        })
       );
 
       // 光标反馈
-      document.body.style.cursor = 'grabbing';
+      document.body.classList.add('bulk-reconnecting');
+
+      // 高亮 hover 到的同类型可接收 handle
+      let lastHoverEl: HTMLElement | null = null;
+      const setHoverHL = (el: HTMLElement | null) => {
+        if (lastHoverEl && lastHoverEl !== el) {
+          lastHoverEl.style.boxShadow = '';
+          lastHoverEl.style.transform = '';
+        }
+        if (el && el !== lastHoverEl) {
+          el.style.boxShadow = '0 0 0 4px rgba(34, 197, 94, 0.6)';
+          el.style.transform = 'scale(1.4)';
+        }
+        lastHoverEl = el;
+      };
 
       const cleanup = () => {
         window.removeEventListener('mouseup', onMouseUp, true);
         window.removeEventListener('mousemove', onMouseMove, true);
         window.removeEventListener('keydown', onKeyDown, true);
-        document.body.style.cursor = '';
+        document.body.classList.remove('bulk-reconnecting');
+        setHoverHL(null);
+        // 移除 phantom 节点
+        setNodes((ns) => ns.filter((n) => n.id !== BULK_PHANTOM_ID));
       };
 
       const restoreOriginal = () => {
-        // 取消: 取消隐藏，边保持不变
+        // 取消: 边 target/source 还原为 stashed 里的原始值
+        const origMap = new Map(stashed.map((s) => [s.id, s]));
         setEdges((eds) =>
-          eds.map((ed) => (stashedIds.has(ed.id) ? { ...ed, hidden: false } : ed))
+          eds.map((ed) => {
+            const orig = origMap.get(ed.id);
+            if (!orig) return ed;
+            return {
+              ...ed,
+              source: orig.source,
+              target: orig.target,
+              sourceHandle: orig.sourceHandle,
+              targetHandle: orig.targetHandle,
+            };
+          })
         );
       };
 
@@ -1138,14 +1225,43 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         }
       };
 
-      const onMouseMove = (_mv: MouseEvent) => {
-        // 预留: 可加拖拽预览线，目前依赖鼠标 cursor 反馈
+      const onMouseMove = (mv: MouseEvent) => {
+        // 更新 phantom 节点位置 → 边跟随鼠标移动
+        const fp = screenToFlowPosition({ x: mv.clientX, y: mv.clientY });
+        setNodes((ns) =>
+          ns.map((n) =>
+            n.id === BULK_PHANTOM_ID ? { ...n, position: fp } : n
+          )
+        );
+        // 高亮 hover 到的同类型 handle
+        const elUnder = document.elementFromPoint(mv.clientX, mv.clientY) as HTMLElement | null;
+        const hoverHandle = elUnder?.closest('.react-flow__handle') as HTMLElement | null;
+        if (hoverHandle) {
+          // 排除自身起点节点的 handle 以及 phantom 自身
+          const hoverNodeEl = hoverHandle.closest('.react-flow__node') as HTMLElement | null;
+          const hoverNodeId =
+            hoverHandle.getAttribute('data-nodeid') ||
+            hoverNodeEl?.getAttribute('data-id') ||
+            '';
+          const hoverType = detectHandleType(hoverHandle);
+          if (
+            hoverNodeId &&
+            hoverNodeId !== startNodeId &&
+            hoverNodeId !== BULK_PHANTOM_ID &&
+            hoverType === startHandleType
+          ) {
+            setHoverHL(hoverHandle);
+            return;
+          }
+        }
+        setHoverHL(null);
       };
 
       const onMouseUp = (upEv: MouseEvent) => {
-        cleanup();
         const upTargetEl = upEv.target as HTMLElement | null;
         const upHandleEl = upTargetEl?.closest('.react-flow__handle') as HTMLElement | null;
+        cleanup();
+
         if (!upHandleEl) {
           restoreOriginal();
           return;
@@ -1155,32 +1271,17 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
           upHandleEl.getAttribute('data-nodeid') ||
           upNodeEl?.getAttribute('data-id') ||
           '';
-        if (!upNodeId || upNodeId === startNodeId) {
+        if (!upNodeId || upNodeId === startNodeId || upNodeId === BULK_PHANTOM_ID) {
           restoreOriginal();
           return;
         }
-
-        let upHandleType: 'source' | 'target' | null = null;
-        const udt = upHandleEl.getAttribute('data-handletype');
-        if (udt === 'target' || udt === 'source') {
-          upHandleType = udt;
-        } else if (upHandleEl.classList.contains('react-flow__handle-left')) {
-          upHandleType = 'target';
-        } else if (upHandleEl.classList.contains('react-flow__handle-right')) {
-          upHandleType = 'source';
-        } else {
-          const pos = upHandleEl.getAttribute('data-handlepos');
-          if (pos === 'left' || pos === 'top') upHandleType = 'target';
-          else if (pos === 'right' || pos === 'bottom') upHandleType = 'source';
-        }
-
-        // 同类型才重连(target→target 或 source→source)
+        const upHandleType = detectHandleType(upHandleEl);
         if (upHandleType !== startHandleType) {
           restoreOriginal();
           return;
         }
 
-        // 执行批量重连
+        // 执行批量重连: 生成新边替换 stashed 中被重定向到 phantom 的边
         setEdges((eds) => {
           const filtered = eds.filter((ed) => !stashedIds.has(ed.id));
           const ts = Date.now();
@@ -1200,7 +1301,6 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
               matched && matched !== 'any' ? PORT_COLOR[matched] : undefined;
             return {
               ...old,
-              hidden: false,
               id: `e-${sourceId}-${targetId}-${ts}-${Math.random()
                 .toString(36)
                 .slice(2, 6)}`,
@@ -1227,8 +1327,13 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     window.addEventListener('mousedown', onMouseDownCapture, true);
     return () => {
       window.removeEventListener('mousedown', onMouseDownCapture, true);
+      window.removeEventListener('keydown', onShiftDown);
+      window.removeEventListener('keyup', onShiftUp);
+      window.removeEventListener('blur', onBlur);
+      document.body.classList.remove('shift-mode');
+      document.body.classList.remove('bulk-reconnecting');
     };
-  }, []);
+  }, [screenToFlowPosition]);
 
   // 计算候选节点列表(根据起始节点输出/输入类型过滤)
   const pickerCandidates = useMemo<Array<NodeMeta & { matchedTypes: PortType[] }>>(() => {

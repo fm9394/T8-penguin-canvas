@@ -40,3 +40,29 @@ body,
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* === SHIFT 批量移线交互反馈 === */
+/* 按住 SHIFT 时,所有 handle 显示 grab 光标,提示可批量拖拽迁移连线 */
+body.shift-mode .react-flow__handle {
+  cursor: grab !important;
+}
+body.shift-mode .react-flow__handle:active,
+body.bulk-reconnecting,
+body.bulk-reconnecting * {
+  cursor: grabbing !important;
+}
+/* 拖拽期间高亮其他可作为目标的同类型 handle */
+body.bulk-reconnecting .react-flow__handle {
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.35);
+}
+
+/* === 批量移线 phantom 节点(透明锚点) === */
+.react-flow__node-bulkPhantom {
+  width: 1px !important;
+  height: 1px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  pointer-events: none !important;
+  opacity: 0;
+}
