@@ -919,9 +919,9 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         onSelectionContextMenu={onSelectionContextMenu}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={onPaneContextMenu}
-        selectionOnDrag
+        selectionKeyCode={['Control', 'Meta']}
+        multiSelectionKeyCode={['Control', 'Meta', 'Shift']}
         selectionMode={SelectionMode.Partial}
-        panOnDrag={[1, 2]}
         snapToGrid={snapEnabled}
         snapGrid={SNAP_GRID}
         fitView
