@@ -1,5 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import { useReactFlow, type NodeProps } from '@xyflow/react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useReactFlow, useNodes, type NodeProps, type Node } from '@xyflow/react';
 import { Play, X, Edit2 } from 'lucide-react';
 import { useThemeStore } from '../../stores/theme';
 import { useGroupBusStore, GROUP_COLORS } from '../../stores/groupBus';
@@ -25,7 +25,6 @@ const GroupBoxNode = ({ id, data, selected }: NodeProps) => {
   const d = data as unknown as GroupBoxData;
   const name = d?.name ?? 'Group';
   const color = d?.color ?? GROUP_COLORS[0];
-  const memberIds = d?.memberIds ?? [];
   const width = d?.width ?? 320;
   const height = d?.height ?? 200;
 
@@ -36,6 +35,40 @@ const GroupBoxNode = ({ id, data, selected }: NodeProps) => {
   const { setNodes, getNodes, getZoom } = useReactFlow();
   const requestExecute = useGroupBusStore((s) => s.requestExecute);
   const requestDelete = useGroupBusStore((s) => s.requestDelete);
+
+  // 实时几何成员计算: 节点中心点在组 bbox 内 → 视为当前成员
+  // (不依赖创组时的静态快照 data.memberIds, 节点拖出/拖入后会自动同步)
+  // 使用 useNodes() 订阅 ReactFlow store, 节点位置变化会触发重新计算
+  const allNodes = useNodes();
+  const liveMemberIds = useMemo<string[]>(() => {
+    const self = allNodes.find((n) => n.id === id);
+    if (!self) return [];
+    const gx = self.position.x;
+    const gy = self.position.y;
+    const gw =
+      (self.data as any)?.width ||
+      (self as any).width ||
+      (self as any).measured?.width ||
+      width;
+    const gh =
+      (self.data as any)?.height ||
+      (self as any).height ||
+      (self as any).measured?.height ||
+      height;
+    const ids: string[] = [];
+    for (const n of allNodes as Node[]) {
+      if (n.id === id) continue;
+      if (n.type === 'groupBox') continue; // 不嵌套组
+      const nw = (n as any).width || (n as any).measured?.width || 200;
+      const nh = (n as any).height || (n as any).measured?.height || 100;
+      const cx = n.position.x + nw / 2;
+      const cy = n.position.y + nh / 2;
+      if (cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh) {
+        ids.push(n.id);
+      }
+    }
+    return ids;
+  }, [allNodes, id, width, height]);
 
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(name);
@@ -308,7 +341,7 @@ const GroupBoxNode = ({ id, data, selected }: NodeProps) => {
           </div>
         )}
 
-        {/* 节点数 */}
+        {/* 节点数 (实时计算: 当前几何上在组内的节点数) */}
         <span
           style={{
             fontSize: 11,
@@ -317,7 +350,7 @@ const GroupBoxNode = ({ id, data, selected }: NodeProps) => {
             flexShrink: 0,
           }}
         >
-          {memberIds.length} 节点
+          {liveMemberIds.length} 节点
         </span>
 
         {/* 编辑按钮 */}
@@ -361,7 +394,8 @@ const GroupBoxNode = ({ id, data, selected }: NodeProps) => {
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
-            requestExecute(id, memberIds);
+            // 按“当前几何包含关系”重新计算成员 → 节点拖入/拖出后执行也以实际为准
+            requestExecute(id, liveMemberIds);
           }}
           title="执行组内所有节点"
           style={{
