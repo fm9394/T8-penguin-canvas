@@ -105,47 +105,93 @@ export const IMAGE_MODELS: ImageModelDef[] = [
 ];
 
 // ========== 视频 ==========
+// kind 决定上游 payload 协议(后端会根据 model 名自动识别,前端主要用于控制参数 UI 列表)
+export type VideoKind = 'veo' | 'grok' | 'seedance';
+
 export interface VideoModelDef {
-  id: string;
-  label: string;
+  id: string;                // 节点默认 model 字段(也是上游真实 model)
+  label: string;             // 主选项显示名
+  kind: VideoKind;
   provider: ProviderType;
   description?: string;
-  durations?: number[]; // 秒
-  aspectRatios?: string[];
-  defaultAspectRatio?: string;
-  supportImages?: boolean; // 是否支持首帧参考图
+  // 子模型下拉(参考项目 类似 gpt-image-2-web 的 g_model / veo_model / gk_model)
+  apiModelOptions: Array<{ value: string; label: string }>;
+  // 比例/尺寸 — 字段名上游各不同,这里只是 UI 选项
+  ratios: string[];
+  defaultRatio: string;
+  // Grok 专用:duration(s)、resolution 下拉
+  durations?: number[];
+  defaultDuration?: number;
+  resolutions?: string[];
+  defaultResolution?: string;
+  // 参考图
+  supportImages: boolean;
+  maxRefImages: number;
 }
+
+// veo3.1 完整 13 个子模型(主项目 index.html line 1350)
+const VEO_MODELS = [
+  { value: 'veo3', label: 'veo3' },
+  { value: 'veo3-fast', label: 'veo3-fast' },
+  { value: 'veo3-pro', label: 'veo3-pro' },
+  { value: 'veo3-fast-frames', label: 'veo3-fast-frames' },
+  { value: 'veo3-pro-frames', label: 'veo3-pro-frames' },
+  { value: 'veo3.1', label: 'veo3.1 默认' },
+  { value: 'veo3.1-fast', label: 'veo3.1-fast' },
+  { value: 'veo3.1-pro', label: 'veo3.1-pro' },
+  { value: 'veo3.1-components', label: 'veo3.1-components' },
+  { value: 'veo3.1-4k', label: 'veo3.1-4k' },
+  { value: 'veo3.1-pro-4k', label: 'veo3.1-pro-4k' },
+  { value: 'veo3.1-components-4k', label: 'veo3.1-components-4k' },
+  { value: 'veo3.1-lite', label: 'veo3.1-lite' },
+];
 
 export const VIDEO_MODELS: VideoModelDef[] = [
   {
-    id: 'veo-3.1',
+    id: 'veo3.1',
     label: 'Veo 3.1',
+    kind: 'veo',
     provider: 'zhenzhen',
-    durations: [5, 10],
-    aspectRatios: ['16:9', '9:16', '1:1'],
-    defaultAspectRatio: '16:9',
+    description: 'Google Veo 3.1 系列 (最多 3 张参考图)',
+    apiModelOptions: VEO_MODELS,
+    // 主项目 veo_ratio 只有 16:9 / 9:16(line 1352)
+    ratios: ['16:9', '9:16'],
+    defaultRatio: '16:9',
     supportImages: true,
-    description: 'Google Veo 高品质视频',
+    maxRefImages: 3,
   },
   {
-    id: 'grok-video',
+    id: 'grok-video-3',
     label: 'Grok Video',
+    kind: 'grok',
     provider: 'zhenzhen',
-    durations: [5, 10],
-    aspectRatios: ['16:9', '9:16'],
-    defaultAspectRatio: '16:9',
+    description: 'xAI Grok Video (最多 7 张参考图)',
+    apiModelOptions: [{ value: 'grok-video-3', label: 'grok-video-3' }],
+    // 主项目 gk_ratio(line 1410): 2:3 / 3:2 / 16:9 / 9:16 / 1:1
+    ratios: ['2:3', '3:2', '16:9', '9:16', '1:1'],
+    defaultRatio: '16:9',
+    // gk_duration(line 1412): 6 / 10 / 15 / 30
+    durations: [6, 10, 15, 30],
+    defaultDuration: 15,
+    // gk_resolution(line 1414): 480P / 720P
+    resolutions: ['480P', '720P'],
+    defaultResolution: '720P',
     supportImages: true,
-    description: 'xAI 视频模型',
+    maxRefImages: 7,
   },
   {
     id: 'seedance-2.0',
     label: 'Seedance 2.0',
+    kind: 'seedance',
     provider: 'zhenzhen',
+    description: '字节 Seedance 分镜 (兼容 veo 字段)',
+    apiModelOptions: [{ value: 'seedance-2.0', label: 'seedance-2.0' }],
+    ratios: ['16:9', '9:16', '1:1'],
+    defaultRatio: '16:9',
     durations: [5, 10, 15],
-    aspectRatios: ['16:9', '9:16', '1:1'],
-    defaultAspectRatio: '16:9',
+    defaultDuration: 5,
     supportImages: true,
-    description: '字节 Seedance 分镜',
+    maxRefImages: 3,
   },
 ];
 

@@ -448,31 +448,115 @@ router.post('/llm', async (req, res) => {
 });
 
 // ========================================================================
-// 视频生成(异步)
-// 协议(贞贞工坊):POST /v2/videos/generations + GET /v2/videos/generations/:tid
+// 视频生成(异步) — 完全对齐 gpt-image-2-web
+// 协议(贞贞工坊): POST /v2/videos/generations + GET /v2/videos/generations/:tid
+//
+// 通过 model 字段自动选择上游 payload 协议:
+//   - 含 'veo'      → Veo3.1 协议:  { prompt, model, enhance_prompt, aspect_ratio, seed?, enable_upsample?, images?(base64,最多3) }
+//                       (主项目 runVeo3, index.html line 3372)
+//   - 含 'grok'     → Grok Video 协议: { prompt, model, ratio, duration(数字秒), resolution, seed?, images?(URL,最多7) }
+//                       (主项目 runGrok3, index.html line 3863) — 参考图先 POST /v1/files 取 URL
+//   - 其它(seedance 等)→ 沿用旧 Veo 字段(零破坏)
 // ========================================================================
+
+// 上传参考图到上游 /v1/files 取 URL(Grok 专用,对齐 uploadFileToAPI line 3104)
+async function uploadRefToZhenzhen(ref, apiKey) {
+  if (typeof ref !== 'string' || !ref) return null;
+  let buf, mime, ext;
+  if (ref.startsWith('data:')) {
+    const m = ref.match(/^data:([^;,]+);base64,(.+)$/);
+    if (!m) return null;
+    mime = m[1] || 'image/png';
+    buf = Buffer.from(m[2], 'base64');
+    ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg');
+  } else if (ref.startsWith('http://') || ref.startsWith('https://') || ref.startsWith('/files/')) {
+    const url = ref.startsWith('/') ? `http://127.0.0.1:${config.PORT}${ref}` : ref;
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    mime = r.headers.get('content-type') || 'image/png';
+    buf = Buffer.from(await r.arrayBuffer());
+    ext = (mime.split('/')[1] || 'png').replace('jpeg', 'jpg');
+  } else {
+    return null;
+  }
+  const fd = new FormData();
+  const blob = new Blob([buf], { type: mime });
+  fd.append('file', blob, `ref_${Date.now()}.${ext}`);
+  const upR = await fetch(`${config.ZHENZHEN_BASE_URL}/v1/files`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: fd,
+  });
+  if (!upR.ok) {
+    console.warn('[video] /v1/files 上传失败 status=', upR.status);
+    return null;
+  }
+  const j = await upR.json();
+  return j?.url || null;
+}
+
 router.post('/video/submit', async (req, res) => {
   const settings = loadRawSettings();
   if (!settings?.zhenzhenApiKey) {
     return res.status(400).json({ success: false, error: '未配置贞贞工坊 API Key' });
   }
-  const { model, prompt, aspect_ratio, enhance_prompt, seed, enable_upsample, images } = req.body || {};
+  const {
+    model, prompt,
+    // Veo 参数
+    aspect_ratio, enhance_prompt, enable_upsample,
+    // Grok 参数
+    ratio, duration, resolution,
+    // 通用
+    seed, images,
+  } = req.body || {};
   if (!model || !prompt) {
     return res.status(400).json({ success: false, error: 'model 和 prompt 必填' });
   }
   const upstream = `${config.ZHENZHEN_BASE_URL}/v2/videos/generations`;
-  const body = { prompt, model, enhance_prompt: enhance_prompt !== false };
-  if (aspect_ratio) body.aspect_ratio = aspect_ratio;
-  if (seed && seed > 0) body.seed = seed;
-  if (enable_upsample) body.enable_upsample = true;
-  if (Array.isArray(images) && images.length) body.images = images.slice(0, 3);
+  const apiKey = settings.zhenzhenApiKey;
+  const lowerModel = String(model).toLowerCase();
+  const isGrok = lowerModel.includes('grok');
+  const isVeo = lowerModel.includes('veo');
+  let body;
 
   try {
+    if (isGrok) {
+      // ===== Grok Video 协议(主项目 runGrok3 line 3863) =====
+      body = {
+        prompt,
+        model,
+        ratio: ratio || '16:9',
+        duration: parseInt(duration ?? 15, 10),
+        resolution: resolution || '720P',
+      };
+      if (seed && seed > 0) body.seed = seed;
+      if (Array.isArray(images) && images.length) {
+        const refs = images.slice(0, 7); // Grok 最多 7 张
+        const urls = [];
+        for (let i = 0; i < refs.length; i++) {
+          const u = await uploadRefToZhenzhen(refs[i], apiKey);
+          if (u) urls.push(u);
+          else throw new Error(`参考图 #${i + 1} 上传失败`);
+        }
+        if (urls.length) body.images = urls;
+      }
+      console.log('[upstream] Grok Video → /v2/videos/generations model:', model, 'ratio:', body.ratio, 'duration:', body.duration, 'resolution:', body.resolution, 'refs:', body.images?.length || 0);
+    } else {
+      // ===== Veo3.1 协议(主项目 runVeo3 line 3372)=====
+      // 旧 seedance / 默认行为也走这里(零破坏)
+      body = { prompt, model, enhance_prompt: enhance_prompt !== false };
+      if (aspect_ratio) body.aspect_ratio = aspect_ratio;
+      if (seed && seed > 0) body.seed = seed;
+      if (enable_upsample) body.enable_upsample = true;
+      if (Array.isArray(images) && images.length) body.images = images.slice(0, 3); // base64 dataURL
+      console.log('[upstream] Veo/Default → /v2/videos/generations model:', model, 'aspect_ratio:', body.aspect_ratio, 'refs:', body.images?.length || 0, isVeo ? '(veo)' : '(legacy)');
+    }
+
     const r = await fetch(upstream, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.zhenzhenApiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
     });

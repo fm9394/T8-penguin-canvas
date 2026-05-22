@@ -124,16 +124,32 @@ export async function uploadFile(file: File): Promise<{ url: string; filename: s
 }
 
 // ========================================================================
-// 视频生成(异步)
+// 视频生成(异步) — 完全对齐 gpt-image-2-web
+//   - veo3.1   字段:  aspect_ratio + enhance_prompt + enable_upsample + seed + images(base64,≤3)
+//   - grok     字段:  ratio + duration(秒,数字) + resolution + seed + images(本地 URL/base64,≤7,后端转上游 URL)
+//   - seedance 字段:  沿用 veo 字段(零破坏)
+// 后端通过 model 字段名自动选择协议,前端无需显式传 kind。
 // ========================================================================
 export interface VideoSubmitRequest {
   model: string;
   prompt: string;
+  // Veo3.1
   aspect_ratio?: string;
   enhance_prompt?: boolean;
-  seed?: number;
   enable_upsample?: boolean;
-  images?: string[]; // base64 首帧参考图(最多 3 张)
+  // Grok Video
+  ratio?: string;
+  duration?: number;
+  resolution?: string;
+  // 通用
+  seed?: number;
+  /**
+   * 参考图。
+   *  - veo3.1:   base64 dataURL,最多 3 张
+   *  - grok:     可传 base64 dataURL 或 /files/* 本地 URL,最多 7 张(后端会上传到上游 /v1/files 取 URL)
+   *  - seedance: base64 dataURL,最多 3 张(同 veo)
+   */
+  images?: string[];
 }
 
 export async function submitVideo(req: VideoSubmitRequest): Promise<{ taskId: string }> {
