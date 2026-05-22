@@ -187,7 +187,6 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
       style={{
         background: isDark ? 'rgb(20,20,22)' : 'rgb(255,255,255)',
         width: 320,
-        overflow: 'hidden',
         borderColor: selected ? accent : isDark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.1)',
       }}
     >
