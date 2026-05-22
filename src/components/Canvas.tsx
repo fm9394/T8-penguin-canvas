@@ -1354,7 +1354,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
           <>
             {/* 遮罩层 */}
             <div
-              className="absolute inset-0 z-30"
+              className="fixed inset-0 z-30"
               onClick={closeContextMenu}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -1362,7 +1362,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
               }}
             />
             <div
-              className="absolute z-40 overflow-hidden"
+              className="fixed z-40 overflow-hidden"
               style={{
                 left: Math.min(contextMenu.x, window.innerWidth - 220),
                 top: Math.min(contextMenu.y, window.innerHeight - 220),
@@ -1477,7 +1477,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
           <>
             {/* 遮罩层 */}
             <div
-              className="absolute inset-0 z-30"
+              className="fixed inset-0 z-30"
               onClick={closePaneMenu}
               onContextMenu={(e) => {
                 e.preventDefault();
@@ -1485,7 +1485,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
               }}
             />
             <div
-              className="absolute z-40 overflow-hidden"
+              className="fixed z-40 overflow-hidden"
               style={{
                 left: Math.min(paneMenu.x, window.innerWidth - 220),
                 top: Math.min(paneMenu.y, window.innerHeight - 360),
