@@ -678,6 +678,15 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         } as Node);
       });
       setNodes((prev) => [...prev, ...placeholders]);
+      // 立即将连接原节点的边转移到占位克隆上,这样拖动过程中连线留在原位不动
+      setEdges((prev) => prev.map((e2) => {
+        let s = e2.source;
+        let t = e2.target;
+        const phS = placeholderIds.get(s);
+        const phT = placeholderIds.get(t);
+        if (!phS && !phT) return e2;
+        return { ...e2, source: phS || s, target: phT || t };
+      }));
       altDragCloneRef.current = { placeholderIds };
     },
     [nodes]
@@ -939,9 +948,17 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         });
       });
 
-      // 复制内部边(新节点之间)
+      // 边处理: dragStart 时边已从 origId 转移到 phId,现在需恢复为 origId + 复制内部边给新节点
       setEdges((prev) => {
-        const cloneEdges = prev
+        // 1. phId → origId 恢复
+        const restored = prev.map((e2) => {
+          const origS = phToOrig.get(e2.source);
+          const origT = phToOrig.get(e2.target);
+          if (!origS && !origT) return e2;
+          return { ...e2, source: origS || e2.source, target: origT || e2.target };
+        });
+        // 2. 复制内部边(原节点之间的边 → 新节点之间)
+        const cloneEdges = restored
           .filter((e2) => origIds.has(e2.source) && origIds.has(e2.target))
           .map((e2, idx) => {
             const s = newIdMap.get(e2.source);
@@ -950,7 +967,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
             return { ...e2, id: `e-alt-${stamp}-${idx}-${Math.random().toString(36).slice(2, 5)}`, source: s, target: t } as Edge;
           })
           .filter(Boolean) as Edge[];
-        return cloneEdges.length > 0 ? [...prev, ...cloneEdges] : prev;
+        return cloneEdges.length > 0 ? [...restored, ...cloneEdges] : restored;
       });
       groupDragRef.current = null;
       return;
