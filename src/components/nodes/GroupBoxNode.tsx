@@ -1,0 +1,415 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { useReactFlow, type NodeProps } from '@xyflow/react';
+import { Play, X, Edit2 } from 'lucide-react';
+import { useThemeStore } from '../../stores/theme';
+import { useGroupBusStore, GROUP_COLORS } from '../../stores/groupBus';
+
+export interface GroupBoxData {
+  name: string;
+  color: string;
+  memberIds: string[];
+  width: number;
+  height: number;
+}
+
+const HEADER_H = 40;
+
+/**
+ * GroupBoxNode —— 节点组(打组容器)
+ * - 半透明圆角矩形,头部带标题栏 + 双击改名 + 颜色指示点 + 右上角执行/删除按钮
+ * - 双主题适配: 科技风(深浅) / 像素糖果风
+ * - zIndex 通过节点配置压在普通节点之下
+ * - 拖动该节点时由 Canvas.onNodeDrag 联动 memberIds 节点位置
+ */
+const GroupBoxNode = ({ id, data, selected }: NodeProps) => {
+  const d = data as unknown as GroupBoxData;
+  const name = d?.name ?? 'Group';
+  const color = d?.color ?? GROUP_COLORS[0];
+  const memberIds = d?.memberIds ?? [];
+  const width = d?.width ?? 320;
+  const height = d?.height ?? 200;
+
+  const { theme, style } = useThemeStore();
+  const isDark = theme === 'dark';
+  const isPixel = style === 'pixel';
+
+  const { setNodes } = useReactFlow();
+  const requestExecute = useGroupBusStore((s) => s.requestExecute);
+  const requestDelete = useGroupBusStore((s) => s.requestDelete);
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(name);
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [isEditing]);
+
+  const updateData = useCallback(
+    (patch: Partial<GroupBoxData>) => {
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === id ? { ...n, data: { ...(n.data as object), ...patch } } : n
+        )
+      );
+    },
+    [id, setNodes]
+  );
+
+  const saveName = useCallback(() => {
+    const v = editValue.trim();
+    if (v && v !== name) updateData({ name: v });
+    else setEditValue(name);
+    setIsEditing(false);
+  }, [editValue, name, updateData]);
+
+  // 主题派生颜色
+  const headerBg = isPixel
+    ? '#FFFFFF'
+    : isDark
+      ? 'rgba(28,28,32,0.92)'
+      : 'rgba(255,255,255,0.92)';
+  const bodyBg = `${color}1F`; // 12% 透明度色块
+  const borderColor = selected ? '#3B82F6' : color;
+  const textColor = isPixel ? '#1A1410' : isDark ? '#fafafa' : '#18181b';
+  const subTextColor = isPixel
+    ? '#5C4D3E'
+    : isDark
+      ? 'rgba(255,255,255,0.5)'
+      : 'rgba(0,0,0,0.5)';
+  const btnBg = isPixel
+    ? '#FFE08A'
+    : isDark
+      ? 'rgba(255,255,255,0.08)'
+      : 'rgba(0,0,0,0.05)';
+  const btnHoverBg = isPixel
+    ? '#FFD45F'
+    : isDark
+      ? 'rgba(255,255,255,0.16)'
+      : 'rgba(0,0,0,0.1)';
+
+  // 像素风:2px 黑边 + 硬阴影
+  const outerStyle: React.CSSProperties = isPixel
+    ? {
+        width,
+        height,
+        background: bodyBg,
+        border: `3px solid ${selected ? '#3B82F6' : '#1A1410'}`,
+        borderRadius: 14,
+        boxShadow: `4px 4px 0 ${color}`,
+        position: 'relative',
+        overflow: 'visible',
+      }
+    : {
+        width,
+        height,
+        background: bodyBg,
+        border: `2px solid ${borderColor}`,
+        borderRadius: 16,
+        boxShadow: selected
+          ? `0 0 0 2px ${borderColor}33, 0 8px 32px rgba(0,0,0,0.18)`
+          : `0 4px 18px rgba(0,0,0,0.14)`,
+        position: 'relative',
+        overflow: 'visible',
+        backdropFilter: 'blur(2px)',
+      };
+
+  return (
+    <div style={outerStyle}>
+      {/* 顶部标题栏 */}
+      <div
+        style={{
+          height: HEADER_H,
+          background: headerBg,
+          borderBottom: isPixel
+            ? `2px solid #1A1410`
+            : `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'}`,
+          borderTopLeftRadius: isPixel ? 11 : 13,
+          borderTopRightRadius: isPixel ? 11 : 13,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 8px',
+          gap: 8,
+          color: textColor,
+          fontWeight: 700,
+        }}
+      >
+        {/* 颜色指示点(点击切色) */}
+        <button
+          className="nodrag"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowColorPicker((v) => !v);
+          }}
+          title="切换组颜色"
+          style={{
+            width: 18,
+            height: 18,
+            borderRadius: '50%',
+            background: color,
+            border: isPixel
+              ? '2px solid #1A1410'
+              : `2px solid ${isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.15)'}`,
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        />
+
+        {/* 名字: 单击 / 双击都可编辑 */}
+        {isEditing ? (
+          <input
+            ref={inputRef}
+            className="nodrag nopan"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') saveName();
+              if (e.key === 'Escape') {
+                setEditValue(name);
+                setIsEditing(false);
+              }
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: 26,
+              background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)',
+              border: `2px solid ${color}`,
+              borderRadius: isPixel ? 6 : 6,
+              padding: '0 8px',
+              fontSize: 13,
+              fontWeight: 700,
+              color: textColor,
+              outline: 'none',
+            }}
+          />
+        ) : (
+          <div
+            className="nodrag"
+            onMouseDown={(e) => e.stopPropagation()}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              setEditValue(name);
+              setIsEditing(true);
+            }}
+            title="双击修改组名"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 13,
+              fontWeight: 700,
+              color: textColor,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              cursor: 'text',
+              userSelect: 'none',
+            }}
+          >
+            {name}
+          </div>
+        )}
+
+        {/* 节点数 */}
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 500,
+            color: subTextColor,
+            flexShrink: 0,
+          }}
+        >
+          {memberIds.length} 节点
+        </span>
+
+        {/* 编辑按钮 */}
+        {!isEditing && (
+          <button
+            className="nodrag"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditValue(name);
+              setIsEditing(true);
+            }}
+            title="重命名"
+            style={{
+              width: 24,
+              height: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: btnBg,
+              border: isPixel ? '2px solid #1A1410' : 'none',
+              borderRadius: isPixel ? 6 : 6,
+              cursor: 'pointer',
+              flexShrink: 0,
+              color: subTextColor,
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = btnHoverBg;
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = btnBg;
+            }}
+          >
+            <Edit2 size={12} />
+          </button>
+        )}
+
+        {/* 执行按钮(右上角) */}
+        <button
+          className="nodrag"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            requestExecute(id, memberIds);
+          }}
+          title="执行组内所有节点"
+          style={{
+            width: 26,
+            height: 26,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: color,
+            border: isPixel ? '2px solid #1A1410' : 'none',
+            borderRadius: isPixel ? 6 : 7,
+            color: '#fff',
+            cursor: 'pointer',
+            flexShrink: 0,
+            boxShadow: isPixel ? '2px 2px 0 #1A1410' : 'none',
+          }}
+        >
+          <Play size={13} fill="currentColor" />
+        </button>
+
+        {/* 删除按钮(仅删除组本身,不删成员) */}
+        <button
+          className="nodrag"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            requestDelete(id);
+          }}
+          title="解散组(成员节点保留)"
+          style={{
+            width: 24,
+            height: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: btnBg,
+            border: isPixel ? '2px solid #1A1410' : 'none',
+            borderRadius: isPixel ? 6 : 6,
+            cursor: 'pointer',
+            flexShrink: 0,
+            color: subTextColor,
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = btnHoverBg;
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = btnBg;
+          }}
+        >
+          <X size={13} strokeWidth={2.5} />
+        </button>
+      </div>
+
+      {/* 颜色选择器 */}
+      {showColorPicker && (
+        <>
+          <div
+            className="nodrag"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowColorPicker(false);
+            }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9998,
+              background: 'transparent',
+            }}
+          />
+          <div
+            className="nodrag"
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'absolute',
+              left: 6,
+              top: HEADER_H + 6,
+              zIndex: 9999,
+              padding: 8,
+              background: isPixel
+                ? '#FFFFFF'
+                : isDark
+                  ? 'rgba(28,28,32,0.98)'
+                  : 'rgba(255,255,255,0.98)',
+              border: isPixel
+                ? '2px solid #1A1410'
+                : `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.1)'}`,
+              borderRadius: isPixel ? 10 : 8,
+              boxShadow: isPixel
+                ? '4px 4px 0 #1A1410'
+                : '0 8px 24px rgba(0,0,0,0.3)',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(6, 1fr)',
+              gap: 6,
+            }}
+          >
+            {GROUP_COLORS.map((c) => (
+              <button
+                key={c}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  updateData({ color: c });
+                  setShowColorPicker(false);
+                }}
+                style={{
+                  width: 22,
+                  height: 22,
+                  background: c,
+                  border:
+                    c === color
+                      ? `2.5px solid ${isPixel ? '#1A1410' : '#fff'}`
+                      : isPixel
+                        ? '2px solid #1A1410'
+                        : '2px solid transparent',
+                  borderRadius: '50%',
+                  cursor: 'pointer',
+                  padding: 0,
+                  boxShadow:
+                    c === color && !isPixel
+                      ? `0 0 0 2px ${c}80`
+                      : 'none',
+                }}
+              />
+            ))}
+          </div>
+        </>
+      )}
+
+      {/* 主体区(空,仅作视觉容器) */}
+      <div
+        style={{
+          width: '100%',
+          height: height - HEADER_H,
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  );
+};
+
+export default GroupBoxNode;

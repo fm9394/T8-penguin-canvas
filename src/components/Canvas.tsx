@@ -19,10 +19,11 @@ import {
   type EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Play, Copy, CopyPlus, Trash2 } from 'lucide-react';
+import { Play, Copy, CopyPlus, Trash2, FolderPlus } from 'lucide-react';
 import { useCanvasStore } from '../stores/canvas';
 import { useThemeStore } from '../stores/theme';
 import { useRunBusStore } from '../stores/runBus';
+import { useGroupBusStore, GROUP_COLORS, DEFAULT_GROUP_NAME } from '../stores/groupBus';
 import { topologicalSort } from '../utils/topologicalSort';
 import * as api from '../services/api';
 import CanvasToolbar from './CanvasToolbar';
@@ -55,6 +56,7 @@ import DrawingBoardNode from './nodes/DrawingBoardNode';
 import BrowserNode from './nodes/BrowserNode';
 import FrameExtractorNode from './nodes/FrameExtractorNode';
 import UploadNode from './nodes/UploadNode';
+import GroupBoxNode from './nodes/GroupBoxNode';
 import { NODE_REGISTRY } from '../config/nodeRegistry';
 import type { NodeType, NodeMeta } from '../types/canvas';
 import {
@@ -139,6 +141,8 @@ const nodeTypes = NODE_REGISTRY.reduce<Record<string, any>>((acc, m) => {
   acc[m.type] = SPECIFIC_NODES[m.type] || PlaceholderNode;
   return acc;
 }, {});
+// 节点组容器(不在 NODE_REGISTRY 中,作为独立的视觉容器节点类型)
+nodeTypes.groupBox = GroupBoxNode;
 
 interface CanvasInnerProps {
   onAddNodeRef?: React.MutableRefObject<((type: NodeType) => void) | null>;
@@ -541,6 +545,84 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     [isRunning, nodes, edges, runNodesByOrder]
   );
 
+  // ===== 节点组(GroupBox) =====
+  // 拖动组节点时使用,记录上一帧位置以计算 delta 同步偏移成员节点
+  const groupDragRef = useRef<{ groupId: string; lastX: number; lastY: number } | null>(null);
+
+  // 创建节点组: 计算 bounding box, 生成 type='groupBox' 节点装进 nodes
+  const handleCreateGroup = useCallback(
+    (ids: string[]) => {
+      // 排除 groupBox 自身(不允许嵌套组)
+      const targets = nodes.filter((n) => ids.includes(n.id) && n.type !== 'groupBox');
+      if (targets.length < 1) {
+        alert('请先选中要打组的节点');
+        return;
+      }
+      const PAD = 30;
+      const HEADER = 40;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      for (const n of targets) {
+        const w = (n as any).width || (n as any).measured?.width || 200;
+        const h = (n as any).height || (n as any).measured?.height || 100;
+        const x = n.position.x;
+        const y = n.position.y;
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x + w > maxX) maxX = x + w;
+        if (y + h > maxY) maxY = y + h;
+      }
+      const groupX = minX - PAD;
+      const groupY = minY - PAD - HEADER;
+      const groupW = (maxX - minX) + PAD * 2;
+      const groupH = (maxY - minY) + PAD * 2 + HEADER;
+      const newId = `group-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      // 随机选一个颜色
+      const color = GROUP_COLORS[Math.floor(Math.random() * GROUP_COLORS.length)];
+      const groupNode: Node = {
+        id: newId,
+        type: 'groupBox',
+        position: { x: groupX, y: groupY },
+        data: {
+          name: DEFAULT_GROUP_NAME,
+          color,
+          memberIds: targets.map((n) => n.id),
+          width: groupW,
+          height: groupH,
+        },
+        // 置于普通节点之下(负 1)
+        zIndex: -1,
+        draggable: true,
+        selectable: true,
+        deletable: true,
+        // 不参与连接校验(本身无 Handle)
+        connectable: false,
+      } as Node;
+      // 插入到最前面,确保渲染顺序在底(配合 zIndex 负值)
+      setNodes((prev) => [groupNode, ...prev.map((n) => ({ ...n, selected: false }))]);
+    },
+    [nodes]
+  );
+
+  // 监听 GroupBox 的执行请求 / 删除请求
+  const executeReq = useGroupBusStore((s) => s.executeReq);
+  const deleteReq = useGroupBusStore((s) => s.deleteReq);
+  const clearExecuteReq = useGroupBusStore((s) => s.clearExecute);
+  const clearDeleteReq = useGroupBusStore((s) => s.clearDelete);
+
+  useEffect(() => {
+    if (!executeReq) return;
+    handleRunGroup(executeReq.memberIds);
+    clearExecuteReq();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [executeReq?.ts]);
+
+  useEffect(() => {
+    if (!deleteReq) return;
+    setNodes((prev) => prev.filter((n) => n.id !== deleteReq.groupId));
+    clearDeleteReq();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteReq?.ts]);
+
   const handleCancelRun = useCallback(() => {
     cancelRunRef.current = true;
     useRunBusStore.getState().cancelAll();
@@ -549,6 +631,30 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   // ===== 智能对齐辅助线 =====
   const onNodeDrag = useCallback(
     (_e: any, node: Node) => {
+      // 拖动 GroupBox 节点: 联动所有成员节点同步偏移
+      if (node.type === 'groupBox') {
+        const ref = groupDragRef.current;
+        if (!ref || ref.groupId !== node.id) {
+          groupDragRef.current = { groupId: node.id, lastX: node.position.x, lastY: node.position.y };
+          return;
+        }
+        const dx = node.position.x - ref.lastX;
+        const dy = node.position.y - ref.lastY;
+        if (dx === 0 && dy === 0) return;
+        ref.lastX = node.position.x;
+        ref.lastY = node.position.y;
+        const memberIds: string[] = (node.data as any)?.memberIds ?? [];
+        if (memberIds.length === 0) return;
+        const idSet = new Set(memberIds);
+        setNodes((prev) =>
+          prev.map((n) =>
+            idSet.has(n.id)
+              ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } }
+              : n
+          )
+        );
+        return;
+      }
       if (!snapEnabled) return;
       const w = (node as any).width || (node as any).measured?.width || 200;
       const h = (node as any).height || (node as any).measured?.height || 100;
@@ -618,6 +724,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
 
   const onNodeDragStop = useCallback(() => {
     setGuides({ vertical: [], horizontal: [] });
+    groupDragRef.current = null;
   }, []);
 
   // ===== 右键菜单 =====
@@ -1250,6 +1357,20 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
               >
                 <Play size={13} fill="currentColor" />
                 <span>组执行 ({exeCount})</span>
+              </button>
+              <button
+                className={menuItemCls}
+                disabled={ids.filter((i) => {
+                  const n = nodes.find((x) => x.id === i);
+                  return n && n.type !== 'groupBox';
+                }).length === 0}
+                onClick={() => {
+                  closeContextMenu();
+                  handleCreateGroup(ids);
+                }}
+              >
+                <FolderPlus size={13} />
+                <span>打组 (选中后)</span>
               </button>
               <button
                 className={menuItemCls}

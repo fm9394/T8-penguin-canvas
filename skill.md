@@ -723,10 +723,97 @@ export interface FalSubmitRequest {
 - 可执行节点必须 `useRunTrigger(id, runFn)` 接入，且 `runFn` 需与“点击生成”为同一个函数。
 - 节点内部以 `try/catch` 消化异常，使 `markDone(id, true)` 始终可调，不会阻塞 `handleRunAll` 的拓扑串行。
 
-### 13.6 验收清单（必跑）
+## 13.6 验收清单（必跑）
 1. `npx tsc --noEmit`
 2. 后端启动无语法错（`node -e "require('./src/routes/proxy')"`）
 3. **端到端**：提交后验证 `taskId` 是真的，轮询能拿到 `urls`，上游后台能看到异步任务。
 4. 双主题选择“像素” 与 “科技” 各看一眼控件是否文本/底色选中态都正常。
+
+---
+
+## 14. 节点组容器（GroupBox / 打组功能）
+
+> 设计参考：主项目 [`PebblingCanvas/NodeGroupBox.tsx`](file:///e:/PenguinPravite/components/PebblingCanvas/NodeGroupBox.tsx)（SVG 实现）。T8 用 ReactFlow（DOM 节点），不能直接复用 SVG 版本，需用 `div + flex` 重写为 ReactFlow 自定义节点类型。
+
+### 14.1 三层解耦架构
+
+ReactFlow 自定义节点（`NodeProps`）拿不到外部 Canvas 作用域里的回调（如 `handleRunGroup`、`setNodes`），不能写死 import 引入循环。**必须**走总线模式：
+
+```
+GroupBoxNode (UI)  ──触发──▶  groupBus store (请求总线 ts 时间戳)  ──监听 useEffect──▶  Canvas (执行/删除)
+```
+
+- [`src/stores/groupBus.ts`](file:///e:/PenguinPravite/T8-penguin-canvas/src/stores/groupBus.ts)：`executeReq` / `deleteReq` 字段为 `{ ts, ... }`，`requestExecute` / `requestDelete` 写入新 ts，Canvas 用 `useEffect(..., [executeReq?.ts])` 触发后调 `clearExecute()` 防重入。
+- [`src/components/nodes/GroupBoxNode.tsx`](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/GroupBoxNode.tsx)：用 `useReactFlow().setNodes` 改自身 data（颜色 / 名字），通过 `useGroupBusStore.getState().requestExecute / requestDelete` 触发 Canvas 行为。
+- [`src/components/Canvas.tsx`](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/Canvas.tsx)：注册 `nodeTypes.groupBox = GroupBoxNode` + `handleCreateGroup` + 拖动联动 + useEffect 监听总线。
+
+### 14.2 GroupBox 节点设计要点
+
+| 关键属性 | 值 | 原因 |
+|---|---|---|
+| `type` | `'groupBox'` | 注册到 `nodeTypes` |
+| `zIndex` | `-1` | 置于普通节点之下，不遮挡成员交互 |
+| `connectable` | `false` | 不参与连线校验，避免污染 `portTypes` |
+| `deletable` | `true` | 支持 Delete 键删除 |
+| `draggable` / `selectable` | `true` | 可被框选可拖动 |
+| `data.memberIds` | `string[]` | 成员节点 id，dangling 容错由消费侧 `idSet.has(n.id)` 过滤 |
+| `data.name` | 默认 `'My favourite girl is Go Younjung'` | 双击标题进入输入框模式 |
+| `data.color` | 从 `GROUP_COLORS` 12 色随机 | 顶部颜色点点击可换色（与主项目 NodeGroupBox.GROUP_COLORS 对齐）|
+| 内部按钮 | `className="nodrag"` + `onMouseDown stopPropagation` | 防止 ReactFlow 把按钮点击当作节点拖拽 |
+
+### 14.3 拖动联动 delta 法
+
+**不能**用 ReactFlow 的 parentNode 父子嵌套（会破坏成员的绝对坐标和现有连线相对参考）。改用 `onNodeDrag` 顶部拦截 + ref 计算每帧 delta：
+
+```ts
+if (node.type === 'groupBox') {
+  const ref = groupDragRef.current;
+  if (!ref || ref.groupId !== node.id) {
+    groupDragRef.current = { groupId: node.id, lastX: node.position.x, lastY: node.position.y };
+    return;
+  }
+  const dx = node.position.x - ref.lastX;
+  const dy = node.position.y - ref.lastY;
+  if (dx === 0 && dy === 0) return;
+  ref.lastX = node.position.x; ref.lastY = node.position.y;
+  const idSet = new Set((node.data as any)?.memberIds ?? []);
+  setNodes(prev => prev.map(n =>
+    idSet.has(n.id) ? { ...n, position: { x: n.position.x + dx, y: n.position.y + dy } } : n));
+  return;
+}
+```
+
+`onNodeDragStop` 中 `groupDragRef.current = null;` 清理。
+
+### 14.4 打组创建 (handleCreateGroup)
+
+- 入参：`ids: string[]`（来自右键菜单选区）。
+- 过滤：`n.type !== 'groupBox'` —— **禁止嵌套**，组里不能再套组。
+- bounding box：`PAD = 30`、`HEADER = 40`，`groupX = minX - PAD`、`groupY = minY - PAD - HEADER`，让标题栏浮在成员上方。
+- 新组节点 unshift 进 nodes 头部并清空其它 selected。
+
+### 14.5 组执行复用拓扑
+
+- 不在 `EXECUTABLE_NODE_TYPES` 加 `groupBox` —— 让全局批量运行自动跳过组容器。
+- 组执行直接调 Canvas 已有的 `handleRunGroup(memberIds)`（从右键菜单"组执行"复用而来），它会对子图做拓扑排序后串行触发。
+- 已删除成员通过 `nodes.filter(n => idSet.has(n.id))` 自然过滤，不报错。
+
+### 14.6 双主题样式分支
+
+```ts
+const outerStyle = isPixel
+  ? { border: `3px solid ${selected ? '#3B82F6' : '#1A1410'}`, borderRadius: 14, boxShadow: `4px 4px 0 ${color}` }  // 像素风：硬阴影
+  : { border: `2px solid ${color}`, borderRadius: 16, boxShadow: selected ? `0 0 0 2px ${color}33, 0 8px 32px rgba(0,0,0,.18)` : `0 4px 18px rgba(0,0,0,.14)`, backdropFilter: 'blur(2px)' };  // 科技风：柔光 + 模糊
+```
+
+半透明底色用 `color + '14'` (HEX 8 位 alpha) 让组内成员仍能透出底色与背景。
+
+### 14.7 验收清单
+1. 框选多个普通节点 → 右键 → "打组" → 出现颜色框；标题栏可双击改名；颜色点点击可换色。
+2. 拖拽组容器，组内所有成员同步位移；松手不残留 ref（再拖另一个组不会从老位置开始）。
+3. 右上角 ▶ 触发 `handleRunGroup`，按拓扑顺序跑完。
+4. 右上角 X 仅删除组容器本身，成员节点保留。
+5. 删除组内某成员后再点 ▶，不抛错（dangling 容错）。
+6. 双主题（科技 / 像素）切换样式正常。
 
 ---

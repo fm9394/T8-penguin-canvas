@@ -61,7 +61,8 @@
     "phase9": { "label": "侧边栏分类重整", "status": "complete", "items": ["图像节点 label 从 'ZhenzhenMagic' 改为 '图像生成' 避免误解", "runninghub + rh-config 从 core 抽出,新建独立 'RH' 分类", "NodeCategory 类型增加 'rh' 枚举值", "ImageNode 模型选择从 select 重构为 3 TAB 胶囊切换(GPT2 / 香蕉2 / 香蕉Pro),对应主项目 gpt-image-2-web Tab 0/1/2"] },
     "phase10": { "label": "上传节点 + 节点间联动(连接类型校验)", "status": "complete", "items": ["新增 UploadNode 上传素材节点(图像/视频/音频三合一,动态输出端口色)", "创建端口语义注册表 src/config/portTypes.ts(7 种 PortType + 25 节点 inputs/outputs 声明)", "ReactFlow 接入 isValidConnection ⏱ 预览阶段拦截不兼容连接(如文本不能连到文本、音频不能连到图像节点的 image 入口)", "连线按上游输出类型自动染色(文本=sky / 图像=amber / 视频=rose / 音频=violet / metadata=cyan / config=indigo / any=slate)", "upload 节点 outputs 动态依赖 data.uploadType,未选择类型时不可连出", "relay 中继节点以 'any' 透传,可接任何输入 / 输出任何类型"] },
     "phase11": { "label": "FAL 渠道接入(gpt-image-2-fal + nano-banana-pro-fal)", "status": "complete", "items": ["严格对齐 gpt-image-2-web 主项目 FAL Queue API 接入规范(SKILL.md §FAL模型渠道接入规范)", "models.ts 新增 FAL_REGISTRY/FalParamKind/isFalModel + gpt-fal/nbpro-fal 两类参数体", "后端新增独立路由 POST /api/proxy/image/fal/submit + GET /api/proxy/image/fal/query(零破坏,不混入 /image/submit)", "baseUrl/fal 前缀代理 queue.fal.run,response_url 域名一次性修复", "submit 同步直返 images[](saveRemoteImage 转存),异步返 requestId+responseUrl+endpoint", "query 轮询规范:HTTP 非200时 body.status=IN_QUEUE/IN_PROGRESS 视为 pending,真错误才抛", "gpt-fal 自定义尺寸 16 倍数对齐(snap16),image_size 7 档枚举 + custom", "nbpro-fal aspect_ratio×resolution(1K/2K/4K) + safety_tolerance(1严-6松) + enable_web_search + system_prompt + seed + image_mode(image_url/base64)", "ImageNode FAL UI 蓝色边框面板 + FAL 专属 state(falXxx/nbXxx)与原标准模型(aspectRatio/sizeLevel)完全隔离,maxRefs 动态切换(gpt-fal=5 / nbpro-fal=8)", "FAL 子模型保持原 TAB 分类(gpt-image-2-fal 在 GPT2 TAB,nano-banana-pro-fal 在 香蕉Pro TAB),对齐主项目'不新增 Tab'原则", "前端轮询 600×3s = 30min 上限"] },
-    "phase12": { "label": "框选 + 右键组执行", "status": "complete", "items": ["ReactFlow selectionKeyCode=['Control','Meta'] + selectionMode=Partial ⏱ 左键拖动仍为平移画布,仅 Ctrl(或 Cmd) + 左键拖动进入框选模式", "multiSelectionKeyCode=['Control','Meta','Shift'] 点击节点时叠加多选", "onSelectionContextMenu / onNodeContextMenu / onPaneContextMenu 统一调度右键菜单状态 contextMenu", "右键菜单项:组执行(N) / 复制 / 快速复制 / 删除;节点上右键未选中则自动单选此节点", "抽取 runNodesByOrder(subNodes, subEdges) 通用引擎:仅保留子集内部的边作为依赖,拓扑排序后串行调 runBus(复用 handleRunAll 逻辑)", "对齐主项目 PenguinPravite/components/PebblingCanvas/index.tsx 的 createGroup/executeGroup 设计思路(selection 临时组 + 可执行节点顺序执行)", "帮助弹窗提示:左键拖动 = 平移 / Ctrl+左键拖动 = 框选 / 右键点击 = 弹菜单"] }
+    "phase12": { "label": "框选 + 右键组执行", "status": "complete", "items": ["ReactFlow selectionKeyCode=['Control','Meta'] + selectionMode=Partial ⏱ 左键拖动仍为平移画布,仅 Ctrl(或 Cmd) + 左键拖动进入框选模式", "multiSelectionKeyCode=['Control','Meta','Shift'] 点击节点时叠加多选", "onSelectionContextMenu / onNodeContextMenu / onPaneContextMenu 统一调度右键菜单状态 contextMenu", "右键菜单项:组执行(N) / 复制 / 快速复制 / 删除;节点上右键未选中则自动单选此节点", "抽取 runNodesByOrder(subNodes, subEdges) 通用引擎:仅保留子集内部的边作为依赖,拓扑排序后串行调 runBus(复用 handleRunAll 逻辑)", "对齐主项目 PenguinPravite/components/PebblingCanvas/index.tsx 的 createGroup/executeGroup 设计思路(selection 临时组 + 可执行节点顺序执行)", "帮助弹窗提示:左键拖动 = 平移 / Ctrl+左键拖动 = 框选 / 右键点击 = 弹菜单"] },
+    "phase13": { "label": "节点组容器(GroupBox)", "status": "complete", "items": ["新增 nodeTypes.groupBox 独立节点类型: 半透明色块 + 圆角边框 + zIndex=-1 在普通节点之下", "新增 stores/groupBus.ts: requestExecute / requestDelete 请求总线解耦 GroupBoxNode 与 Canvas", "新增 components/nodes/GroupBoxNode.tsx: 双主题适配(科技风/像素糖果风) + 顶部标题栏 + 颜色选择器(12色) + 双击改名 + 右上角▶执行/X解散按钮", "默认名字: 'My favourite girl is Go Younjung'", "右键菜单新增 「打组」 项: 计算 bounding box 包裹 + 30px padding + 40px 标题高,随机选一个颜色,排除 groupBox 自身防止嵌套", "拖动联动: Canvas.onNodeDrag 拦截 type==='groupBox' 计算 dx/dy 同步偏移 memberIds 节点,实现「拖组带走所有成员」", "组执行: 复用 handleRunGroup(memberIds),仅保留成员子集内部边作为依赖,拓扑排序后串行调 runBus", "设计思路对齐 PenguinPravite/components/PebblingCanvas/NodeGroupBox.tsx (GROUP_COLORS 调色板 / headerHeight=40 / 双击改名)"] }
   },
   "categories": {
     "input": {
@@ -281,7 +282,9 @@
     "Ctrl+A": "全选",
     "左键拖动空白": "平移画布",
     "Ctrl + 左键拖动": "框选多个节点",
-    "右键点击节点/选区": "弹出菜单(组执行/复制/删除)",
+    "右键点击节点/选区": "弹出菜单(组执行/打组/复制/删除)",
+    "打组后右上角 ▶": "执行组内所有节点",
+    "打组后双击标题": "重命名节点组",
     "中键 / 右键拖动": "平移画布",
     "空格 + 拖拽": "平移画布(备选)"
   }
