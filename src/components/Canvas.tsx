@@ -623,7 +623,13 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
 
   // ===== 节点组(GroupBox) =====
   // 拖动组节点时使用,记录上一帧位置以计算 delta 同步偏移成员节点
-  const groupDragRef = useRef<{ groupId: string; lastX: number; lastY: number } | null>(null);
+  // memberIds 在拖动开始时根据当前几何关系动态计算(不依赖创组时快照)
+  const groupDragRef = useRef<{
+    groupId: string;
+    lastX: number;
+    lastY: number;
+    memberIds: string[];
+  } | null>(null);
 
   // 创建节点组: 计算 bounding box, 生成 type='groupBox' 节点装进 nodes
   const handleCreateGroup = useCallback(
@@ -711,7 +717,40 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       if (node.type === 'groupBox') {
         const ref = groupDragRef.current;
         if (!ref || ref.groupId !== node.id) {
-          groupDragRef.current = { groupId: node.id, lastX: node.position.x, lastY: node.position.y };
+          // 首帧: 根据当前几何位置重新计算哪些节点在组矩形内
+          // (节点中心点在组 bbox 内则视为成员,不再依赖创组时的静态 memberIds)
+          const gx = node.position.x;
+          const gy = node.position.y;
+          const gw =
+            (node.data as any)?.width ||
+            (node as any).width ||
+            (node as any).measured?.width ||
+            0;
+          const gh =
+            (node.data as any)?.height ||
+            (node as any).height ||
+            (node as any).measured?.height ||
+            0;
+          const liveMembers: string[] = [];
+          for (const n of nodes) {
+            if (n.id === node.id) continue;
+            if (n.type === 'groupBox') continue; // 不嵌套组
+            const nw =
+              (n as any).width || (n as any).measured?.width || 200;
+            const nh =
+              (n as any).height || (n as any).measured?.height || 100;
+            const cx = n.position.x + nw / 2;
+            const cy = n.position.y + nh / 2;
+            if (cx >= gx && cx <= gx + gw && cy >= gy && cy <= gy + gh) {
+              liveMembers.push(n.id);
+            }
+          }
+          groupDragRef.current = {
+            groupId: node.id,
+            lastX: node.position.x,
+            lastY: node.position.y,
+            memberIds: liveMembers,
+          };
           return;
         }
         const dx = node.position.x - ref.lastX;
@@ -719,9 +758,8 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         if (dx === 0 && dy === 0) return;
         ref.lastX = node.position.x;
         ref.lastY = node.position.y;
-        const memberIds: string[] = (node.data as any)?.memberIds ?? [];
-        if (memberIds.length === 0) return;
-        const idSet = new Set(memberIds);
+        if (ref.memberIds.length === 0) return;
+        const idSet = new Set(ref.memberIds);
         setNodes((prev) =>
           prev.map((n) =>
             idSet.has(n.id)
@@ -798,8 +836,19 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     [nodes, snapEnabled]
   );
 
-  const onNodeDragStop = useCallback(() => {
+  const onNodeDragStop = useCallback((_e: any, node: Node) => {
     setGuides({ vertical: [], horizontal: [] });
+    // 拖动组结束: 将最新的几何成员同步到 data.memberIds(供 GroupBoxNode 显示节点数/执行使用)
+    if (node?.type === 'groupBox' && groupDragRef.current?.groupId === node.id) {
+      const latestIds = groupDragRef.current.memberIds;
+      setNodes((prev) =>
+        prev.map((n) =>
+          n.id === node.id
+            ? { ...n, data: { ...((n.data as any) || {}), memberIds: latestIds } }
+            : n
+        )
+      );
+    }
     groupDragRef.current = null;
   }, []);
 
