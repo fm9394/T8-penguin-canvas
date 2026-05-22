@@ -1,5 +1,11 @@
 import { memo, useMemo, useRef, useState } from 'react';
-import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
+import {
+  Handle,
+  Position,
+  useNodeConnections,
+  useNodesData,
+  type NodeProps,
+} from '@xyflow/react';
 import { MonitorPlay, Type as TypeIcon, Image as ImageIcon, Video as VideoIcon, Music, Download, Pencil, Check } from 'lucide-react';
 import { useUpdateNodeData } from './useUpdateNodeData';
 import { useThemeStore } from '../../stores/theme';
@@ -19,6 +25,11 @@ import { PORT_COLOR } from '../../config/portTypes';
  *   4. 文本双击进入可编辑状态, 编辑保存到 data.outputText (覆盖上游 live 文本)
  *      置空 outputText 时再次显示上游原文
  *   5. 不向下游输出 (终端节点)
+ *
+ * 渲染联动机制(重要):
+ *   - 使用 xyflow 官方 useNodeConnections + useNodesData 订阅上游连接变化
+ *     和上游节点 data 变化; useReactFlow().getNodes/getEdges 是稳定回调
+ *     本身不会触发重渲染, 在 React.memo 节点里会造成不刷新。
  */
 
 const isVideoUrl = (u: string) => /\.(mp4|webm|mov|m4v|mkv)(\?|$)/i.test(u);
@@ -33,18 +44,20 @@ interface Collected {
 
 const OutputNode = ({ id, data, selected }: NodeProps) => {
   const update = useUpdateNodeData(id);
-  const { getEdges, getNodes } = useReactFlow();
   const { theme } = useThemeStore();
   const isDark = theme === 'dark';
   const d = (data as any) || {};
 
-  // 对齐 VideoOutputNode 的做法：在 useMemo 里调 getEdges()/getNodes() 读一次,
-  // xyflow 在任何节点 data 变化都会重渲染可见节点,这里就会重算。
-  // d 作为依赖之一以保证本节点 data 变化也能刷新(如 outputText)。
+  // 订阅连入本节点 target handle 的连接变化
+  const connections = useNodeConnections({ id, handleType: 'target' });
+  const upstreamIds = useMemo(
+    () => Array.from(new Set(connections.map((c) => c.source))),
+    [connections]
+  );
+  // 订阅上游节点的 data, 任何上游 data 变化都会触发重渲染
+  const upstreamNodes = useNodesData(upstreamIds);
+
   const collected = useMemo<Collected>(() => {
-    const edges = getEdges();
-    const nodes = getNodes();
-    const upstreamIds = edges.filter((e) => e.target === id).map((e) => e.source);
     const out: Collected = { texts: [], images: [], videos: [], audios: [] };
 
     const pushUnique = (arr: string[], v: any) => {
@@ -54,8 +67,8 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
       if (arr.indexOf(s) === -1) arr.push(s);
     };
 
-    for (const uid of upstreamIds) {
-      const n = nodes.find((x) => x.id === uid);
+    const list = Array.isArray(upstreamNodes) ? upstreamNodes : [];
+    for (const n of list) {
       const ud: any = n?.data || {};
 
       // 文本
@@ -94,7 +107,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
     });
 
     return out;
-  }, [id, getEdges, getNodes, d]);
+  }, [upstreamNodes]);
 
   // 文本编辑
   const overrideText: string = typeof d.outputText === 'string' ? d.outputText : '';
@@ -130,15 +143,12 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
 
   return (
     <div
-      className={`relative rounded-xl border-2 transition-all ${
-        selected ? 'shadow-2xl' : 'hover:border-white/30'
-      }`}
+      className="relative rounded-xl border-2 transition-colors"
       style={{
         background: isDark ? 'rgba(20,20,22,.92)' : 'rgba(255,255,255,.96)',
         backdropFilter: 'blur(8px)',
         width: 320,
         borderColor: selected ? accent : isDark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.1)',
-        boxShadow: selected ? `0 12px 40px ${accent}33` : undefined,
       }}
     >
       {/* 仅有 target handle (终端节点不向下游输出) */}
@@ -178,11 +188,11 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
       <div className="p-2.5 space-y-3" onMouseDown={(e) => e.stopPropagation()}>
         {total === 0 && (
           <div
-            className={`rounded border-2 border-dashed flex items-center justify-center text-[11px] py-6 ${
-              isDark ? 'border-white/10 text-white/40' : 'border-black/10 text-zinc-400'
+            className={`rounded flex items-center justify-center text-[11px] py-3 px-2 ${
+              isDark ? 'text-white/40' : 'text-zinc-400'
             }`}
           >
-            从上游连入文本 / 图像 / 视频 / 音频
+            连入上游 文本 / 图像 / 视频 / 音频 节点
           </div>
         )}
 

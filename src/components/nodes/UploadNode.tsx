@@ -16,18 +16,18 @@ import { PORT_COLOR } from '../../config/portTypes';
 /**
  * UploadNode - 通用上传素材节点
  *
- * 设计:
- *   1. 节点创建时无类型(uploadType=null),展示三个分类按钮(图像/视频/音频)
- *   2. 用户选定类型 → 出现拖拽/点击上传区域,只接受对应 MIME
+ * 设计(v2 重构: 占除了"先选类型"步骤):
+ *   1. 节点创建后默认就是"点击/拖拽上传"状态, accept = image/video/audio 三合一
+ *   2. 选中/拖入文件 → 按 MIME 自动识别 kind (图像/视频/音频)
  *   3. 上传完成:保存 url 到对应字段(imageUrl / videoUrl / audioUrl)
  *      同时按类型选择正确的端口颜色
- *   4. Handle 颜色随 uploadType 变化(image=黄/video=粉/audio=紫)
- *   5. 未上传完成时,Handle 变灰,但仍可由 isValidConnection 拒绝连接
- *   6. 已上传后右上角支持重置/换图
+ *   4. Handle 颜色随 uploadType 变化(image=黄/video=粉/audio=紫);
+ *      未上传时 Handle 为中性 any 色
+ *   5. 已上传后右上角可重置/换文件
  *
  * 与下游联动:
  *   - 上游 nothing(无 target Handle)
- *   - 输出 → 通过 data.imageUrl/videoUrl/audioUrl 暴露给下游(VideoNode、ImageNode 等已通过遍历 upstream 的 .data 自动取得)
+ *   - 输出 → 通过 data.imageUrl/videoUrl/audioUrl 暴露给下游
  */
 type UploadKind = 'image' | 'video' | 'audio';
 
@@ -96,13 +96,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
   const meta = uploadType ? KIND_META[uploadType] : null;
   const url: string | undefined = meta ? d?.[meta.dataField] : undefined;
 
-  /** 选择类型(尚未上传时) */
-  const handlePickKind = (kind: UploadKind) => {
-    update({ uploadType: kind });
-    setError(null);
-  };
-
-  /** 重置:清空所有字段,回到选择类型界面 */
+  /** 重置:清空所有字段,回到默认拖拽上传状态 */
   const handleReset = () => {
     update({
       uploadType: null,
@@ -147,17 +141,23 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
     }
   };
 
-  /** 文件选择(已选 kind):校验 MIME 后上传 */
+  /** 文件选择:自动按 MIME 推断 kind 后上传 */
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // 允许重复选同一文件
-    if (!file || !uploadType) return;
-    const km = KIND_META[uploadType];
-    if (!file.type.startsWith(km.accept.replace('/*', '/'))) {
+    if (!file) return;
+    const inferred = uploadType ?? inferKindFromFile(file);
+    if (!inferred) {
+      setError('无法识别文件类型,请选择图像/视频/音频');
+      return;
+    }
+    // 若已选定类型且不匹配, 提示错误
+    if (uploadType && uploadType !== inferred) {
+      const km = KIND_META[uploadType];
       setError(`文件类型不匹配:期望 ${km.label},得到 ${file.type || '未知'}`);
       return;
     }
-    void uploadFile(file, uploadType);
+    void uploadFile(file, inferred);
   };
 
   /** 拖拽上传:若 kind 未选则按文件 MIME 自动推断 */
@@ -183,14 +183,11 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
 
   return (
     <div
-      className={`relative rounded-xl border-2 transition-all w-[260px] ${
-        selected ? 'shadow-2xl' : 'hover:border-white/30'
-      }`}
+      className="relative rounded-xl border-2 transition-colors w-[260px]"
       style={{
         background: isDark ? 'rgba(20,20,22,.92)' : 'rgba(255,255,255,.96)',
         backdropFilter: 'blur(8px)',
         borderColor: selected ? handleColor : isDark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.1)',
-        boxShadow: selected ? `0 12px 40px ${handleColor}33` : undefined,
       }}
     >
       {/* 仅有 source handle(上传节点不接收输入) */}
@@ -237,171 +234,103 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
 
       {/* body */}
       <div className="p-2.5 space-y-2" onMouseDown={(e) => e.stopPropagation()}>
-        {/* Step 1: 选类型(未选时) */}
-        {!uploadType && (
-          <>
-            <div className={`text-[10px] mb-1 ${isDark ? 'text-white/50' : 'text-zinc-500'}`}>
-              选择素材类型
-            </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {(['image', 'video', 'audio'] as UploadKind[]).map((k) => {
-                const m = KIND_META[k];
-                const Icon = m.icon;
-                return (
-                  <button
-                    key={k}
-                    onClick={() => handlePickKind(k)}
-                    className={`flex flex-col items-center gap-1 py-2 rounded transition-all ${
-                      isDark
-                        ? 'bg-white/5 hover:bg-white/10 text-white/80'
-                        : 'bg-black/5 hover:bg-black/10 text-zinc-700'
-                    }`}
-                    style={
-                      isPixel
-                        ? {
-                            background: m.color,
-                            color: '#1A1410',
-                            border: '1.5px solid #1A1410',
-                            boxShadow: '1.5px 1.5px 0 #1A1410',
-                          }
-                        : undefined
-                    }
-                  >
-                    <Icon size={16} style={{ color: isPixel ? '#1A1410' : m.color }} />
-                    <span className="text-[10px] font-medium">{m.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-            <div
-              className={`text-[10px] text-center pt-1 ${
+        {/* 隐藏的文件输入: accept 三合一, 上传后自动按 MIME 识别 kind */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={meta ? meta.accept : 'image/*,video/*,audio/*'}
+          className="hidden"
+          onChange={handleFileChange}
+        />
+
+        {/* 未上传状态: 一个大点击/拖拽区域, 自动识别类型 */}
+        {!url && (
+          <div
+            onClick={triggerPick}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={handleDrop}
+            className={`cursor-pointer rounded border-2 border-dashed flex flex-col items-center justify-center text-[11px] transition-colors py-6 px-3 ${
+              dragActive
+                ? 'bg-white/10'
+                : isDark
+                  ? 'border-white/15 hover:border-white/30 text-white/60'
+                  : 'border-black/15 hover:border-black/30 text-zinc-500'
+            }`}
+            style={dragActive ? { borderColor: handleColor } : undefined}
+          >
+            <UploadIcon size={22} className="mb-1.5" style={{ color: handleColor }} />
+            <span className="font-medium">
+              {uploading ? '上传中...' : dragActive ? '松开以上传' : '点击或拖拽文件'}
+            </span>
+            <span
+              className={`text-[10px] mt-0.5 ${
                 isDark ? 'text-white/30' : 'text-zinc-400'
               }`}
             >
-              或直接拖拽文件到此节点
-            </div>
-            {/* 拖拽兜底区(整个 body 监听) */}
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={handleDrop}
-              className={`h-12 rounded border-2 border-dashed flex items-center justify-center text-[10px] transition-colors ${
-                dragActive
-                  ? 'border-amber-400/60 bg-amber-400/10'
-                  : isDark
-                    ? 'border-white/10 text-white/40'
-                    : 'border-black/10 text-zinc-400'
-              }`}
-            >
-              {dragActive ? '松开以上传' : '拖拽到此自动识别类型'}
-            </div>
-          </>
+              自动识别 图像 / 视频 / 音频
+            </span>
+          </div>
         )}
 
-        {/* Step 2: 已选类型,允许上传/替换 */}
-        {uploadType && (
-          <>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={meta!.accept}
-              className="hidden"
-              onChange={handleFileChange}
-            />
-
-            {!url && (
-              <div
-                onClick={triggerPick}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setDragActive(true);
-                }}
-                onDragLeave={() => setDragActive(false)}
-                onDrop={handleDrop}
-                className={`cursor-pointer h-24 rounded border-2 border-dashed flex flex-col items-center justify-center text-[11px] transition-colors ${
-                  dragActive
-                    ? 'bg-white/10'
-                    : isDark
-                      ? 'border-white/15 hover:border-white/30 text-white/60'
-                      : 'border-black/15 hover:border-black/30 text-zinc-500'
-                }`}
-                style={dragActive ? { borderColor: handleColor } : undefined}
-              >
-                <UploadIcon size={18} className="mb-1" style={{ color: handleColor }} />
-                <span>{uploading ? '上传中...' : `点击或拖拽 ${meta!.label} 文件`}</span>
-                <span className={`text-[10px] mt-0.5 ${isDark ? 'text-white/30' : 'text-zinc-400'}`}>
-                  {meta!.accept.replace('/*', '/*')}
+        {/* 已上传:展示预览 + 文件信息 */}
+        {url && uploadType && meta && (
+          <div className="space-y-1.5">
+            {uploadType === 'image' && (
+              <img
+                src={url}
+                alt={fileName}
+                className="w-full h-auto rounded block"
+                style={{ background: '#0008', objectFit: 'contain', maxHeight: 480 }}
+              />
+            )}
+            {uploadType === 'video' && (
+              <video
+                src={url}
+                controls
+                className="w-full h-auto rounded block"
+                style={{ background: '#000', objectFit: 'contain', maxHeight: 480 }}
+              />
+            )}
+            {uploadType === 'audio' && (
+              <audio src={url} controls className="w-full" />
+            )}
+            <div
+              className={`flex items-center gap-1 text-[10px] ${
+                isDark ? 'text-white/50' : 'text-zinc-500'
+              }`}
+            >
+              <span className="truncate flex-1" title={fileName}>
+                {fileName || '未命名'}
+              </span>
+              {fileSize > 0 && (
+                <span className="opacity-70">
+                  {(fileSize / 1024).toFixed(1)} KB
                 </span>
-              </div>
-            )}
-
-            {/* 已上传:展示预览 + 文件信息 */}
-            {url && (
-              <div className="space-y-1.5">
-                {uploadType === 'image' && (
-                  <img
-                    src={url}
-                    alt={fileName}
-                    className="w-full h-auto rounded block"
-                    style={{ background: '#0008', objectFit: 'contain', maxHeight: 480 }}
-                  />
-                )}
-                {uploadType === 'video' && (
-                  <video
-                    src={url}
-                    controls
-                    className="w-full h-auto rounded block"
-                    style={{ background: '#000', objectFit: 'contain', maxHeight: 480 }}
-                  />
-                )}
-                {uploadType === 'audio' && (
-                  <audio src={url} controls className="w-full" />
-                )}
-                <div
-                  className={`flex items-center gap-1 text-[10px] ${
-                    isDark ? 'text-white/50' : 'text-zinc-500'
-                  }`}
-                >
-                  <span className="truncate flex-1" title={fileName}>
-                    {fileName || '未命名'}
-                  </span>
-                  {fileSize > 0 && (
-                    <span className="opacity-70">
-                      {(fileSize / 1024).toFixed(1)} KB
-                    </span>
-                  )}
-                  <button
-                    onClick={triggerPick}
-                    title="替换文件"
-                    className={`p-0.5 rounded ${
-                      isDark ? 'hover:bg-white/10' : 'hover:bg-black/10'
-                    }`}
-                  >
-                    <UploadIcon size={11} />
-                  </button>
-                  <button
-                    onClick={() =>
-                      update({
-                        [meta!.dataField]: undefined,
-                        fileName: '',
-                        fileSize: 0,
-                        mime: '',
-                      })
-                    }
-                    title="清空文件"
-                    className={`p-0.5 rounded ${
-                      isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-100 text-red-600'
-                    }`}
-                  >
-                    <X size={11} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
+              )}
+              <button
+                onClick={triggerPick}
+                title="替换文件"
+                className={`p-0.5 rounded ${
+                  isDark ? 'hover:bg-white/10' : 'hover:bg-black/10'
+                }`}
+              >
+                <UploadIcon size={11} />
+              </button>
+              <button
+                onClick={handleReset}
+                title="清空文件"
+                className={`p-0.5 rounded ${
+                  isDark ? 'hover:bg-red-500/20 text-red-400' : 'hover:bg-red-100 text-red-600'
+                }`}
+              >
+                <X size={11} />
+              </button>
+            </div>
+          </div>
         )}
 
         {/* 错误提示 */}

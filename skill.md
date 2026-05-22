@@ -1734,5 +1734,98 @@ const onConnect = useCallback((params) => {
 | `0fb11e7` | Canvas memoize `defaultEdgeOptions / proOptions / selectionKeyCode / multiSelectionKeyCode`；onConnect / onIsValidConnection 改 ref 模式；onConnect 实现 output 单输入自动派生新节点 |
 | `5aac649` | **根因修复** —— RelayNode `useEffect` 加 `[upstreamSignature]` deps，彻底杜绝 setState 风暴 |
 
+---
+
+## 23. 下游节点订阅上游 data 变化的官方做法（useNodeConnections + useNodesData）
+
+> 2026-05-23 修复"OutputNode 连上上传节点后不刷新"bug 后沉淀。**所有纯读上游型节点（如 OutputNode / VideoOutputNode / ImageCompareNode / StoryboardGridNode）都应遵守。**
+
+### 23.1 现象
+
+- 拖一个 `上传素材` 节点上传图片 → 连到 `输出素材` 节点
+- `输出素材` 始终显示 `0 项` + "连入上游..."占位，不刷新
+- 刷新页面后能看到图片。原因：进入画布后上游再变就不刷新。
+
+### 23.2 根因
+
+之前的实现依赖 `useReactFlow().getEdges() / getNodes()` 在 `useMemo([id, getEdges, getNodes, p.data])` 里读上游：
+
+- `getEdges` / `getNodes` 是 xyflow 提供的稳定 callback，永远不变
+- `p.data` 是本节点自身的 data，上游 data 变化**不会**带动本节点 props
+- 节点被 `React.memo` 包裹 → props 浅比较 → 跳过重渲染 → useMemo 不重算
+
+### 23.3 正确做法（强制）
+
+```tsx
+import { useNodeConnections, useNodesData } from '@xyflow/react';
+
+// 订阅连入 target handle 的连接变化
+const connections = useNodeConnections({ id, handleType: 'target' });
+const upstreamIds = useMemo(
+  () => Array.from(new Set(connections.map((c) => c.source))),
+  [connections]
+);
+
+// 订阅上游节点 data 变化（返回 [{id, type, data}, ...]）
+const upstreamNodes = useNodesData(upstreamIds);
+
+const collected = useMemo(() => {
+  const list = Array.isArray(upstreamNodes) ? upstreamNodes : [];
+  for (const n of list) {
+    const ud: any = n?.data || {};
+    // ... 提取 imageUrl / videoUrl / audioUrl / prompt ...
+  }
+  return out;
+}, [upstreamNodes]);
+```
+
+原理：
+- `useNodeConnections({ id, handleType })` 订阅 store 的 edges + handle map，连接增删会触发重渲染
+- `useNodesData(ids)` 订阅这些节点的 data，任何一个上游 data 变化都会触发重渲染
+- 两个官方 hook 在 store 内部做了高效的 selector + Object.is 比较，**不会造成多余重渲染**
+
+### 23.4 与 22.2 RelayNode 修复的差异
+
+| 场景 | 应用方案 |
+|---|---|
+| **中继型节点**（如 RelayNode）要把上游透传到自身 data | `useMemo` 计算 `upstreamSignature` + `useEffect([upstreamSignature])` 调 `update()`（见 22.2） |
+| **终端型节点**（如 OutputNode / VideoOutputNode / ImageCompareNode）仅渲染上游 | `useNodeConnections` + `useNodesData`（本章），**绝不调 update()**避免循环 |
+
+记住：终端型节点 ≠ 中继型节点。不写自身 data 的节点优先用 23.3 方案。
+
+### 23.5 节点视觉多层阴影叠加陷阱
+
+同次修复中发现：
+
+```tsx
+// ❌ 三层阴影同时生效 → 节点右下方出现多余白色方框
+<div
+  className={`... ${selected ? 'shadow-2xl' : 'hover:border-white/30'}`}
+  style={{ boxShadow: selected ? `0 12px 40px ${accent}33` : undefined }}
+>
+```
++ 像素风全局 CSS `box-shadow: var(--px-shadow-hard-lg)` (5px 5px 0)
+
+三层阴影叠加：`shadow-2xl`（Tailwind 25px+ blur） + inline `boxShadow`（teal 40px blur） + 像素风硬阴影 → 节点右下角出现错位的白色方块。
+
+修复原则：
+- selected 状态只靠 `borderColor` 变化提示（像素风额外有 outline-dashed）
+- 不要同时加 `shadow-2xl` className 与 inline `boxShadow`
+- 空状态占位区不要用 `border-2 border-dashed`，改为纯文本提示，避免与节点边框叠加产生双重框
+
+### 23.6 节点交互减法原则（以 UploadNode 为例）
+
+原设计：创建 → 选择类型（图像/视频/音频） → 上传（三步）。
+重构后：创建 → 点击/拖拽上传 → 自动识别（一步）。
+
+关键：
+- `<input type="file" accept="image/*,video/*,audio/*">`（三合一）
+- `inferKindFromFile(file: File)` 按 `file.type` 前缀推断到 `image/video/audio`
+- 上传成功后 `update({ uploadType: kind, [dataField]: url })`，节点自动切换到预览模式并染色 Handle
+- 可点击右上角重置重选
+
+**交互减法原则**：节点默认状态应该是「用户能立即开始产出价值」的状态。能用 MIME 识别的就不要让用户选，能从上下文推断的就不要重复输入。
+
+
 
 ---
