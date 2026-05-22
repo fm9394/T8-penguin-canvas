@@ -705,7 +705,7 @@ function mjSpeedSeg(speed) {
 // 返回上游 imagine 原始响应 { code, description, result(taskId), properties }
 router.post('/mj/imagine', async (req, res) => {
   const settings = loadRawSettings();
-  if (!settings?.imageApiKey) return res.status(400).json({ success: false, error: '未配置贞贞工坊 API Key' });
+  if (!settings?.zhenzhenApiKey) return res.status(400).json({ success: false, error: '未配置贞贞工坊 API Key' });
   const body = req.body || {};
   const speedSeg = mjSpeedSeg(body.speed);
   const url = `${config.ZHENZHEN_BASE_URL}/${speedSeg}/mj/submit/imagine`;
@@ -737,7 +737,7 @@ router.post('/mj/imagine', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.imageApiKey}`,
+        Authorization: `Bearer ${settings.zhenzhenApiKey}`,
       },
       body: JSON.stringify(payload),
     });
@@ -756,7 +756,7 @@ router.post('/mj/imagine', async (req, res) => {
 // 轮询任务状态；URL 中 ai.comfly.chat 调为 ai.t8star.cn（与 server.py L2306 一致）
 router.get('/mj/task/:id', async (req, res) => {
   const settings = loadRawSettings();
-  if (!settings?.imageApiKey) return res.status(400).json({ success: false, error: '未配置贞贞工坊 API Key' });
+  if (!settings?.zhenzhenApiKey) return res.status(400).json({ success: false, error: '未配置贞贞工坊 API Key' });
   const taskId = req.params.id;
   const speedSeg = mjSpeedSeg(req.query.speed);
   if (!taskId) return res.status(400).json({ success: false, error: 'taskId 必填' });
@@ -766,7 +766,7 @@ router.get('/mj/task/:id', async (req, res) => {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.imageApiKey}`,
+        Authorization: `Bearer ${settings.zhenzhenApiKey}`,
       },
     });
     const raw = (await r.text()).replace(/ai\.comfly\.chat/g, 'ai.t8star.cn');
@@ -786,7 +786,7 @@ router.get('/mj/task/:id', async (req, res) => {
 // 上传参考图到 MJ Discord，返回 URL（主项目 uploadMJImage L4407 + server.py L2457）
 router.post('/mj/upload', async (req, res) => {
   const settings = loadRawSettings();
-  if (!settings?.imageApiKey) return res.status(400).json({ success: false, error: '未配置贞贞工坊 API Key' });
+  if (!settings?.zhenzhenApiKey) return res.status(400).json({ success: false, error: '未配置贞贞工坊 API Key' });
   const { base64Data, speed } = req.body || {};
   if (!base64Data) return res.status(400).json({ success: false, error: 'base64Data 不得为空' });
   const speedSeg = mjSpeedSeg(speed);
@@ -797,7 +797,7 @@ router.post('/mj/upload', async (req, res) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${settings.imageApiKey}`,
+        Authorization: `Bearer ${settings.zhenzhenApiKey}`,
       },
       body: JSON.stringify(payload),
     });
