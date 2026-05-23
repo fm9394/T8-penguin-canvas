@@ -1,8 +1,9 @@
 # T8-penguin-canvas · skill.md
 
 > 项目能力 / 接口 / 文件用途速查手册。
-> 版本：v1.5.4 ｜ 仓库：<https://github.com/T8mars/T8-penguin-canvas>
+> 版本：v1.5.5 ｜ 仓库：<https://github.com/T8mars/T8-penguin-canvas>
 >
+> v1.5.5 增量：图像轮询超时上限 120s → 3600s（GPT2 / nano-banana / nano-banana-pro 标准异步路径），避免复杂任务被提前中断（38）
 > v1.5.4 增量：LLM 多模态 image_url 预处理 · 修复上游 /files/* 本地路径透传被上游误读为 base64 导致 convert_request_failed（37）
 >
 > v1.5.3 增量：节点拖出候选菜单 中继节点置顶（36）
@@ -3310,6 +3311,76 @@ const payload = { model, messages: normalizedMessages, /* ... */ };
 - [backend/src/routes/proxy.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/routes/proxy.js)——新增 `normalizeLlmMessageImages` + `/llm` 路由头部调用
 - 参考 helper：同文件 `refToBananaImage`（line 140-155）
 - 上游字段读取：[LLMNode.tsx collectUpstream](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/LLMNode.tsx#L121-L139)
+
+---
+
+## 38. 图像轮询超时上限抬高：120s → 3600s（v1.5.5）
+
+### 38.1 背景
+
+用户反馈：**GPT2 模型超时等待现在可能是 120 秒，改成 3600 秒**。
+
+原因：GPT2 / nano-banana / nano-banana-pro 标准异步路径上，**复杂 prompt** 或 **多参考图** 任务上游实际还在排队 / 生成，前端却被 `60×2s = 120s` 提前中断报超时。
+
+### 38.2 原轮询参数（紧耦合在两处）
+
+| 位置 | 字段 | 原值 | 合计上限 |
+|---|---|---|---|
+| [ImageNode.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/ImageNode.tsx#L466-L495) “原有标准路径” | `maxPoll = 60` / `interval = 2000` | 60 × 2s | **120 s** |
+| [proxy.js pollImageTask](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/routes/proxy.js) | `maxRetries = 60` / `interval = 2000` | 60 × 2s | **120 s** |
+
+两处都针对同一个上游路由 `/v1/images/tasks/{tid}`。
+
+### 38.3 修复
+
+只调次数上限，间隔 2s 不变：
+
+```diff
+- const maxPoll = 60;       // 最多 60 次
++ const maxPoll = 1800;     // 最多 1800 次  (1800 × 2s = 3600s = 60 分钟)
+  const interval = 2000;    // 每 2 秒一次
+```
+
+```diff
+- async function pollImageTask(taskId, apiKey, maxRetries = 60, interval = 2000) {
++ async function pollImageTask(taskId, apiKey, maxRetries = 1800, interval = 2000) {
+```
+
+### 38.4 适用范围
+
+仅影响 **标准异步任务轮询**（贞贞工坊 `/v1/images/tasks/{tid}`）走的模型：
+
+- GPT Image 2
+- nano-banana-2
+- nano-banana-pro
+
+**不影响**以下独立超时逻辑的模型，他们各自保持原有参数：
+
+| 模型 | 轮询位置 | 参数 |
+|---|---|---|
+| Midjourney (Comfly) | [ImageNode.tsx L301-L342](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/ImageNode.tsx#L301-L342) | `maxPoll=300 × 3s` |
+| GPT2-FAL / nano-banana-pro-FAL | [ImageNode.tsx L390-L429](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/ImageNode.tsx#L390-L429) | `600 × 3s` |
+| Seedance / Veo3 / Grok-FAL | SeedanceNode / VideoNode | 各自 `maxPoll/pollInt` |
+| Suno | AudioNode | `60 × 3s` |
+
+### 38.5 零破坏保证
+
+- 任务 `status=success/failed` 一旦返回仍会立即出循环，**不会造成正常任务 60 分钟空转**
+- 只是上限抬高，调用方脚本（不传 maxRetries）自动获得 3600s；传了自定义值的调用仍按传入走
+- 进度日志“[i+1/maxPoll]”可能跳动变大，仅为提示作用，不影响逻辑
+- 前后端同步修改防止 `/api/proxy/image` 同步代理路径（极少走）仍被 120s 提前截断
+
+### 38.6 验证清单
+
+- [x] `node -c backend/src/routes/proxy.js` 语法检查通过
+- [x] `npx tsc --noEmit` 无报错
+- [x] `npx vite build` 成功（5.33s）
+- [ ] GPT2 复杂 prompt + 4 参考图任务可运行超过 2 分钟仍不被前端提前中断（待用户验证）
+
+### 38.7 关键文件
+
+- [src/components/nodes/ImageNode.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/ImageNode.tsx#L466-L470)——`maxPoll` 60 → 1800
+- [backend/src/routes/proxy.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/routes/proxy.js)——`pollImageTask` 默认 `maxRetries` 60 → 1800
 
 ---
 

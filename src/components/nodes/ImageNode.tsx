@@ -463,7 +463,9 @@ const ImageNode = ({ id, data, selected }: NodeProps) => {
       if (!taskId) throw new Error('未获取到 taskId 且无同步结果');
       logBus.info(`异步任务已提交 taskId=${taskId} 进入轮询…`, src);
       update({ progress: submit.progress || '5%', taskId });
-      const maxPoll = 60;       // 最多 60 次
+      // GPT2 / nano-banana / nano-banana-pro 标准路径轮询上限:
+      //   maxPoll × interval = 1800 × 2s = 3600s = 60 分钟(避免复杂 prompt / 多参考图任务被 120s 提前中断)
+      const maxPoll = 1800;     // 最多 1800 次
       const interval = 2000;    // 每 2 秒一次
       let lastProg = '5%';
       for (let i = 0; i < maxPoll; i++) {

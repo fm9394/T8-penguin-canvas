@@ -421,7 +421,9 @@ router.get('/image/status/:tid', async (req, res) => {
 });
 
 // ========== 图像异步任务轮询(同步代理内部使用,路径对齐主项目 /v1/images/tasks/) ==========
-async function pollImageTask(taskId, apiKey, maxRetries = 60, interval = 2000) {
+// 轮询上限:1800 × 2s = 3600s = 60 分钟,与前端 ImageNode 标准路径保持一致,
+// 避免 GPT2 复杂 prompt / 多参考图任务被 120s 提前中断。
+async function pollImageTask(taskId, apiKey, maxRetries = 1800, interval = 2000) {
   const url = `${config.ZHENZHEN_BASE_URL}/v1/images/tasks/${encodeURIComponent(taskId)}`;
   for (let i = 0; i < maxRetries; i++) {
     await new Promise(r => setTimeout(r, interval));
