@@ -1874,12 +1874,13 @@ router.post('/audio/upload', audioUpload.single('file'), async (req, res) => {
 // ========================================================================
 // RunningHub 工作流(异步)
 // 协议:POST /task/openapi/ai-app/run + POST /task/openapi/outputs
-// API Key 取自 settings.runninghubApiKey
+// API Key 取自 settings.rhApiKey（与 settings.js / 前端 ApiSettings 字段保持一致；
+// 历史代码误写为 runninghubApiKey 导致永远读不到，已修正）
 // ========================================================================
 router.post('/runninghub/submit', async (req, res) => {
   const settings = loadRawSettings();
-  const apiKey = settings?.runninghubApiKey;
-  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+  const apiKey = settings?.rhApiKey || settings?.runninghubApiKey;
+  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）' });
   const { webappId, nodeInfoList, instanceType } = req.body || {};
   if (!webappId) return res.status(400).json({ success: false, error: 'webappId 必填' });
   try {
@@ -1904,8 +1905,8 @@ router.post('/runninghub/submit', async (req, res) => {
 
 router.get('/runninghub/query', async (req, res) => {
   const settings = loadRawSettings();
-  const apiKey = settings?.runninghubApiKey;
-  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+  const apiKey = settings?.rhApiKey || settings?.runninghubApiKey;
+  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）' });
   const taskId = String(req.query.taskId || '').trim();
   if (!taskId) return res.status(400).json({ success: false, error: 'taskId 必填' });
   try {
@@ -1963,8 +1964,8 @@ router.get('/runninghub/query', async (req, res) => {
 // 获取 AI 应用信息(nodeInfoList 等)
 router.get('/runninghub/app-info', async (req, res) => {
   const settings = loadRawSettings();
-  const apiKey = settings?.runninghubApiKey;
-  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key' });
+  const apiKey = settings?.rhApiKey || settings?.runninghubApiKey;
+  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）' });
   const webappId = String(req.query.webappId || '').trim();
   if (!webappId) return res.status(400).json({ success: false, error: 'webappId 必填' });
   try {
