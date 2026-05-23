@@ -31,6 +31,25 @@ function inferValueType(fieldType: string | undefined): 'text' | 'number' | 'ima
 // ========== 提取字段选项列表（LIST / SELECT / DROPDOWN 等下拉类型字段）==========
 // RH apiCallDemo 响应中选项可能出现在多个字段名下，有些应用还会把选项数组直接放在 fieldValue 里。
 // 返回纯文本/数字数组；null 表示不是下拉选项字段。
+//
+// 额外补充：RH webapp apiCallDemo 经常只返回 fieldType=TEXT 不带 options 数组，
+// 但某些常见参数名（aspectRatio/resolution/instanceType...）在实践中就是枚举。
+// 这里维护一个 fieldName 词典作为薱底，仅在 candidates 都未命中时才使用。
+const KNOWN_FIELD_OPTIONS: Record<string, Array<string | number>> = {
+  aspectRatio: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '3:2', '2:3', '21:9', '9:21', '1:4', '4:1', '1:8', '8:1'],
+  aspect_ratio: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '3:2', '2:3', '21:9', '9:21'],
+  ratio: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '3:2', '2:3'],
+  resolution: ['1k', '2k', '4k', '8k'],
+  size: ['512', '768', '1024', '1280', '1536', '2048'],
+  mode: ['text2img', 'img2img'],
+  quality: ['low', 'medium', 'high', 'best'],
+  instanceType: ['default', 'plus', 'pro'],
+  instance_type: ['default', 'plus', 'pro'],
+  precision: ['fp16', 'fp32', 'bf16'],
+  scheduler: ['normal', 'karras', 'exponential', 'sgm_uniform', 'simple', 'ddim_uniform'],
+  sampler: ['euler', 'euler_ancestral', 'heun', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpmpp_2m', 'dpmpp_sde', 'ddim', 'uni_pc'],
+};
+
 function extractFieldOptions(it: any): Array<string | number> | null {
   // 按优先级依次尝试多种字段名
   const candidates = [
@@ -61,6 +80,16 @@ function extractFieldOptions(it: any): Array<string | number> | null {
     const arr = it.fieldValue;
     if (arr.length > 0 && arr.every((x: any) => typeof x === 'string' || typeof x === 'number')) {
       return arr as Array<string | number>;
+    }
+  }
+  // 4) 词典薱底：按 fieldName 命中常见 RH 枚举字段（不区分大小写）
+  const fname = String(it?.fieldName || '').trim();
+  if (fname) {
+    const direct = KNOWN_FIELD_OPTIONS[fname];
+    if (direct) return direct;
+    const lower = fname.toLowerCase();
+    for (const k in KNOWN_FIELD_OPTIONS) {
+      if (k.toLowerCase() === lower) return KNOWN_FIELD_OPTIONS[k];
     }
   }
   return null;
@@ -429,6 +458,10 @@ const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
     try {
       const info = await fetchRhAppInfo(webappId, useWallet);
       const list: any[] = info?.nodeInfoList || [];
+      // 调试日志：打印原始 nodeInfoList 结构，方便后续按实际字段名/fieldType 扩充 LIST 词典
+      try {
+        console.log('[RH/fetchInfo] webappId=', webappId, 'nodeInfoList=', JSON.parse(JSON.stringify(list)));
+      } catch {}
       const next: Record<string, { value: string; sourceFromUpstream?: boolean }> = { ...paramValues };
       for (const it of list) {
         const k = paramKey(it.nodeId, it.fieldName);
@@ -613,12 +646,14 @@ const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
               const fieldDataOptions = extractFieldOptions(it);
               return (
                 <div key={i} className="space-y-1 pb-2 border-b border-white/5 last:border-0 last:pb-0">
-                  <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] text-white/80 font-medium truncate">{it.fieldName}</span>
-                    <span className="text-[9px] text-cyan-300/60 px-1 rounded bg-cyan-500/10">
+                  <div className="flex items-center gap-1 text-[10px] leading-tight">
+                    <span className="text-white/80 font-medium truncate">{it.fieldName}</span>
+                    <span className="text-white/20">|</span>
+                    <span className="text-cyan-300/60 px-1 rounded bg-cyan-500/10">
                       {fieldDataOptions ? `select(${fieldDataOptions.length})` : vt}
                     </span>
-                    <span className="text-[9px] text-white/30">#{it.nodeId}</span>
+                    <span className="text-white/20">|</span>
+                    <span className="text-white/30">#{it.nodeId}</span>
                   </div>
                   {it?.description && (
                     <div className="text-[9px] text-white/40 leading-tight">{it.description}</div>
