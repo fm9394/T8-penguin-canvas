@@ -1962,12 +1962,25 @@ router.get('/runninghub/query', async (req, res) => {
     else if (data.code === 813) status = 'QUEUED';
     else if (data.code === 805) status = 'FAILED';
     else status = 'UNKNOWN';
+    // failReason 序列化为字符串：ComfyUI 报错可能是 object（traceback/exception_message/...）
+    // 前端直接用于 setError 会造成 React JSX 渲染 object 崩溃。
+    let failReasonRaw = data?.data?.failedReason ?? data?.data?.failReason ?? null;
+    let failReasonStr = null;
+    if (failReasonRaw != null) {
+      if (typeof failReasonRaw === 'string') {
+        failReasonStr = failReasonRaw;
+      } else if (typeof failReasonRaw === 'object') {
+        failReasonStr = failReasonRaw.exception_message || failReasonRaw.message || JSON.stringify(failReasonRaw);
+      } else {
+        failReasonStr = String(failReasonRaw);
+      }
+    }
     res.json({
       success: true,
       data: {
         status,
         urls,
-        failReason: data?.data?.failedReason || data?.data?.failReason || null,
+        failReason: failReasonStr,
         code: data.code,
         raw: data,
       },

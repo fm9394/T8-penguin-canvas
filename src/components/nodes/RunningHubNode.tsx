@@ -105,8 +105,23 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
           });
         } else if (r.status === 'FAILED') {
           stopPoll();
-          update({ status: 'error', error: r.failReason || `RH 失败 code=${r.code}` });
-          setError(r.failReason || `RH 失败 code=${r.code}`);
+          // failReason 可能是 ComfyUI 报错对象(含 traceback/exception_type 等)，
+          // 需序列化为字符串避免 React JSX 直接渲染 object 崩溃
+          let reason: string;
+          if (r.failReason == null) {
+            reason = `RH 失败 code=${r.code}`;
+          } else if (typeof r.failReason === 'string') {
+            reason = r.failReason;
+          } else {
+            try {
+              const o: any = r.failReason;
+              reason = o?.exception_message || o?.message || JSON.stringify(o);
+            } catch {
+              reason = `RH 失败 code=${r.code}`;
+            }
+          }
+          update({ status: 'error', error: reason });
+          setError(reason);
         } else {
           update({ status: 'polling', rhCode: r.code });
         }
