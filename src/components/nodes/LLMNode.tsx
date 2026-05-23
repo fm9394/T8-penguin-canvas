@@ -110,7 +110,10 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
   const d = data as any;
   const model: string = d?.model || DEFAULT_LLM_MODEL;
   const status: 'idle' | 'generating' | 'success' | 'error' = d?.status || 'idle';
-  const localPrompt: string = d?.prompt || '';
+    // 用户输入框值: 改用 d.userPrompt 私有字段（避免与对下游开放的 d.prompt=助手回复 冲突，
+    // 否则下游 useUpstreamMaterials 会同时 pushText(d.prompt) + pushText(d.reply) 出现两条文本）
+    // 兼容旧画布: 若仅有 d.prompt 而无 d.userPrompt 也无 d.reply（即历史数据从未生成过），按用户输入读取一次
+    const localPrompt: string = d?.userPrompt ?? (d?.reply == null && typeof d?.prompt === 'string' ? d.prompt : '');
   const systemPrompt: string = d?.system ?? '你是一个提示词专家，将用户的提示词优化';
   const temperature: number = typeof d?.temperature === 'number' ? d.temperature : 0.7;
   const maxTokens: number = typeof d?.maxTokens === 'number' ? d.maxTokens : 4096;
@@ -373,7 +376,7 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
       setPickedFiles((s) => (s.some((f) => f.dataUrl === url) ? s : [...s, { name: url.split('/').pop() || 'dropped', dataUrl: url }]));
       logBus.info(`已接受拖入图像 · ${url.slice(-40)}`, src);
     } else if (payload.kind === 'text' && typeof payload.text === 'string') {
-      update({ prompt: payload.text });
+      update({ userPrompt: payload.text });
     }
   };
   const { dropProps, isAccepting } = useMaterialDropTarget({
@@ -566,7 +569,7 @@ const LLMNode = ({ id, data, selected }: NodeProps) => {
           <textarea
             ref={userRef}
             value={localPrompt}
-            onChange={(e) => update({ prompt: e.target.value })}
+            onChange={(e) => update({ userPrompt: e.target.value })}
             placeholder="备用:无上游连接时使用"
             className="w-full h-60 resize-none rounded bg-white/5 border border-white/10 px-2 py-1 text-[11px] text-white outline-none focus:border-white/30 placeholder:text-white/30 overflow-y-auto"
           />
