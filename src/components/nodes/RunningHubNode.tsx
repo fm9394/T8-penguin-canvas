@@ -585,13 +585,14 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
 
         <div>
           <label className="text-[10px] text-white/50 block mb-1">实例类型(可选)</label>
-          <input
-            type="text"
-            value={instanceType}
+          <select
+            value={instanceType || ''}
             onChange={(e) => update({ instanceType: e.target.value })}
-            placeholder="plus"
-            className="w-full rounded bg-white/5 border border-white/10 px-2 py-1 text-xs text-white outline-none focus:border-white/30 placeholder:text-white/30"
-          />
+            className="w-full rounded bg-white/5 border border-white/10 px-2 py-1 text-xs text-white outline-none focus:border-white/30"
+          >
+            <option value="" className="bg-zinc-800">默认</option>
+            <option value="plus" className="bg-zinc-800">plus</option>
+          </select>
         </div>
 
         {!isBusy ? (
