@@ -210,10 +210,29 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
       const vt = it?.valueType;
       if (!nodeId || !fieldName) continue;
       if (vt === 'image' || vt === 'video' || vt === 'audio') {
-        const v = String(fieldValue || '').trim();
+        let v = String(fieldValue || '').trim();
+        // 最后一道兼底：如果当前值看起来不是 url（可能是 RH 内部默认 hash 或用户手填 fileName），
+        // 但上游连了对应类型的媒体节点，且用户没有主动取消 sourceFromUpstream，
+        // 则强制用上游 url，避免 state 异步/race condition 导致仍提交默认 hash。
+        const isUrlLike0 =
+          /^https?:\/\//i.test(v) ||
+          v.startsWith('/files/output/') ||
+          v.startsWith('/output/') ||
+          v.startsWith('/files/input/') ||
+          v.startsWith('/input/');
+        if (!isUrlLike0) {
+          const k = paramKey(nodeId, fieldName);
+          const cur = paramValues[k];
+          if (cur?.sourceFromUpstream !== false) {
+            const upUrl = findUpstreamUrl(vt as any);
+            if (upUrl) {
+              console.log('[RH/resolve] override field', fieldName, 'from', v || '(empty)', '→ upstream', upUrl);
+              v = upUrl;
+            }
+          }
+        }
         if (!v) continue; // 未提供资源 → 跳过该条目
         // 判定为本地/远程 url 的样式 → 走 /upload-asset 转 fileName
-        // 包含：https:// / /files/output/ / /output/ / /files/input/ / /input/
         const isUrlLike =
           /^https?:\/\//i.test(v) ||
           v.startsWith('/files/output/') ||
