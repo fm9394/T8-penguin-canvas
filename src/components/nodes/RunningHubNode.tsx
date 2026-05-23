@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react';
-import { AlertCircle, Loader2, Workflow, Sparkles, Square, Search, RefreshCw } from 'lucide-react';
+import { AlertCircle, Loader2, Workflow, Wallet, Sparkles, Square, Search, RefreshCw } from 'lucide-react';
 import { submitRh, queryRh, fetchRhAppInfo, uploadRhAsset } from '../../services/generation';
 import { useUpdateNodeData } from './useUpdateNodeData';
 import { useHasAutoOutput } from './useHasAutoOutput';
@@ -45,13 +45,23 @@ function extractUpstreamUrl(d: any, kind: 'image' | 'video' | 'audio'): string {
 
 const paramKey = (nodeId: any, fieldName: any) => `${nodeId}::${fieldName}`;
 
-const RunningHubNode = ({ id, data, selected }: NodeProps) => {
+const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
   const update = useUpdateNodeData(id);
   const hasAutoOutput = useHasAutoOutput(id);
   const { getEdges, getNodes } = useReactFlow();
   const [error, setError] = useState<string | null>(null);
   const pollTimer = useRef<number | null>(null);
   const [fetchingInfo, setFetchingInfo] = useState(false);
+
+  // 节点双背仰：runninghub-wallet 使用 RH 企业级共享 APIKEY（settings.rhWalletApiKey），
+  // 与默认 RunningHub 节点的 settings.rhApiKey 完全隔离。
+  const useWallet = type === 'runninghub-wallet';
+  const titleText = useWallet ? 'RH钱包应用' : 'RunningHub';
+  const TitleIcon = useWallet ? Wallet : Workflow;
+  // 主调色：默认套 cyan 主调；wallet 套 violet（与节点表主色一致）
+  const accent = useWallet
+    ? { ring: 'border-violet-400', shadow: 'shadow-violet-500/20', dot: 'rgba(139,92,246,.2)', dotInk: '#c4b5fd', dotEdge: 'rgba(139,92,246,.45)', handle: '!bg-violet-400', subBg: 'border-violet-500/20 bg-violet-500/5', sub: 'text-violet-200/80', tag: 'text-violet-300/60 bg-violet-500/10', primary: 'bg-violet-500/20 hover:bg-violet-500/30 text-violet-200', spin: 'text-violet-200/80' }
+    : { ring: 'border-cyan-400', shadow: 'shadow-cyan-500/20', dot: 'rgba(6,182,212,.2)', dotInk: '#67e8f9', dotEdge: 'rgba(6,182,212,.45)', handle: '!bg-cyan-400', subBg: 'border-cyan-500/20 bg-cyan-500/5', sub: 'text-cyan-200/80', tag: 'text-cyan-300/60 bg-cyan-500/10', primary: 'bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200', spin: 'text-cyan-200/80' };
 
   const d = data as any;
   const webappId: string = d?.webappId || '';
@@ -240,7 +250,7 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
           v.startsWith('/files/input/') ||
           v.startsWith('/input/');
         if (isUrlLike) {
-          const r = await uploadRhAsset(v);
+          const r = await uploadRhAsset(v, useWallet);
           fieldValue = r.fileName;
         } else {
           fieldValue = v;
@@ -268,7 +278,7 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
         return;
       }
       try {
-        const r = await queryRh(tid);
+        const r = await queryRh(tid, useWallet);
         console.log('[RH/poll] taskId=', tid, 'status=', r.status, 'code=', r.code, 'urls=', r.urls?.length || 0);
         if (r.status === 'SUCCESS') {
           stopPoll();
@@ -330,7 +340,7 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
     }
     setFetchingInfo(true);
     try {
-      const info = await fetchRhAppInfo(webappId);
+      const info = await fetchRhAppInfo(webappId, useWallet);
       const list: any[] = info?.nodeInfoList || [];
       const next: Record<string, { value: string; sourceFromUpstream?: boolean }> = { ...paramValues };
       for (const it of list) {
@@ -410,6 +420,7 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
         webappId,
         nodeInfoList,
         instanceType: instanceType || undefined,
+        useWallet,
       });
       console.log('[RH/submit] taskId=', r.taskId);
       update({ status: 'polling', taskId: r.taskId });
@@ -438,23 +449,23 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
   return (
     <div
       className={`relative rounded-xl border-2 transition-all w-[340px] ${
-        selected ? 'border-cyan-400 shadow-2xl shadow-cyan-500/20' : 'border-white/15 hover:border-white/30'
+        selected ? `${accent.ring} shadow-2xl ${accent.shadow}` : 'border-white/15 hover:border-white/30'
       }`}
       style={{ background: 'rgba(20,20,22,.92)', backdropFilter: 'blur(8px)' }}
     >
-      <Handle type="target" position={Position.Left} className="!bg-cyan-400 !border-0" />
-      <Handle type="source" position={Position.Right} className="!bg-cyan-400 !border-0" />
+      <Handle type="target" position={Position.Left} className={`${accent.handle} !border-0`} />
+      <Handle type="source" position={Position.Right} className={`${accent.handle} !border-0`} />
 
       <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10">
         <div
           className="w-6 h-6 rounded flex items-center justify-center"
-          style={{ background: 'rgba(6,182,212,.2)', color: '#67e8f9', boxShadow: 'inset 0 0 0 1px rgba(6,182,212,.45)' }}
+          style={{ background: accent.dot, color: accent.dotInk, boxShadow: `inset 0 0 0 1px ${accent.dotEdge}` }}
         >
-          <Workflow size={13} />
+          <TitleIcon size={13} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-semibold text-white truncate">RunningHub</div>
-          <div className="text-[10px] text-white/40 truncate">{appInfo?.appName || appInfo?.name || 'AI 工作流'}</div>
+          <div className="text-sm font-semibold text-white truncate">{titleText}</div>
+          <div className="text-[10px] text-white/40 truncate">{appInfo?.appName || appInfo?.name || (useWallet ? 'RH 钱包应用 (共享 APIKEY)' : 'AI 工作流')}</div>
         </div>
       </div>
 
@@ -482,8 +493,8 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
 
         {/* 参数表单：拉取 nodeInfoList 后逐条展开 */}
         {nodeInfoList.length > 0 && (
-          <div className="rounded border border-cyan-500/20 bg-cyan-500/5 p-2 space-y-2 max-h-[420px] overflow-auto">
-            <div className="text-[10px] text-cyan-200/80 flex items-center justify-between">
+          <div className={`rounded border ${accent.subBg} p-2 space-y-2 max-h-[420px] overflow-auto`}>
+            <div className={`text-[10px] ${accent.sub} flex items-center justify-between`}>
               <span>参数 ({nodeInfoList.length})</span>
               <span className="text-white/30">点击字段可编辑</span>
             </div>
@@ -617,9 +628,9 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
         {!isBusy ? (
           <button
             onClick={handleRun}
-            className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 text-xs font-medium transition-colors"
+            className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded ${accent.primary} text-xs font-medium transition-colors`}
           >
-            <Sparkles size={12} /> 运行工作流
+            <Sparkles size={12} /> {useWallet ? '运行钱包工作流' : '运行工作流'}
           </button>
         ) : (
           <button
@@ -631,7 +642,7 @@ const RunningHubNode = ({ id, data, selected }: NodeProps) => {
         )}
 
         {isBusy && (
-          <div className="flex items-center gap-1 text-[10px] text-cyan-200/80">
+          <div className={`flex items-center gap-1 text-[10px] ${accent.spin}`}>
             <Loader2 size={11} className="animate-spin" />
             {status === 'submitting' ? '提交任务...' : '轮询中'}
             {taskId && <span className="ml-auto text-white/30">{String(taskId).slice(0, 10)}…</span>}

@@ -102,7 +102,7 @@ async function startBackend() {
 
   // 同进程内加载后端,先注册 T8ENC1 + bytenode loader
   try {
-    require('./loader.cjs');
+    require('./loader');
     if (isPackaged()) {
       // 打包后:加载加密的字节码入口
       const entry = path.join(process.resourcesPath, 'backend-enc', 'server.t8c');
@@ -132,7 +132,7 @@ function createMainWindow() {
     backgroundColor: '#0b0b0d',
     title: '贞贞的无限画布（企鹅共创版） v1.1.0',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,

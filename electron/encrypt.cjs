@@ -21,9 +21,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const Module = require('module');
 const bytenode = require('bytenode');
-const { encryptBuffer } = require('./loader.cjs');
+const { encryptBuffer } = require('./loader');
 
 const BACKEND_SRC = path.resolve(__dirname, '..', 'backend', 'src');
 const OUT_DIR = path.resolve(__dirname, '..', 'build', 'backend-enc');
@@ -78,13 +77,18 @@ function encryptFile(srcAbs) {
   let src = fs.readFileSync(srcAbs, 'utf-8');
   src = rewriteRequires(src);
 
-  // bytenode.compileCode 第二个参数是 compress (brotli),不是 compileAsModule。
-  // 必须手动 Module.wrap(src) 把源码包装成 (function (exports,require,module,...){ ... })
-  // 这样 bytenode 的 require.extensions['.jsc'] hook 运行时才会拿到 wrapper 函数并传入 require。
-  // 需要确保本脚本在 Electron 进程中执行(ELECTRON_RUN_AS_NODE=1),
-  // 这样产出的字节码与运行时 Electron V8 版本一致。
-  const wrapped = Module.wrap(src);
-  const jsc = bytenode.compileCode(wrapped);
+  // bytenode 编译需要先写到临时 .js 文件再产出 .jsc
+  const tmpJs = path.join(OUT_DIR, '_tmp_' + Date.now() + '_' + Math.random().toString(36).slice(2) + '.js');
+  ensureDir(path.dirname(tmpJs));
+  fs.writeFileSync(tmpJs, src, 'utf-8');
+  let jscPath;
+  try {
+    jscPath = bytenode.compileFile({ filename: tmpJs, output: tmpJs.replace(/\.js$/, '.jsc'), compileAsModule: true });
+  } finally {
+    try { fs.unlinkSync(tmpJs); } catch (_) {}
+  }
+  const jsc = fs.readFileSync(jscPath);
+  try { fs.unlinkSync(jscPath); } catch (_) {}
 
   const enc = encryptBuffer(jsc);
   fs.writeFileSync(dst, enc);

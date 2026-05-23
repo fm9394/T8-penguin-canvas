@@ -22,7 +22,7 @@ import { useRunBusStore } from '../stores/runBus';
 const EXECUTABLE_NODE_TYPES = new Set<string>([
   'image', 'edit',
   'multi-angle-3d', 'panorama-720', 'penguin-portrait',
-  'video', 'seedance', 'audio', 'llm', 'runninghub',
+  'video', 'seedance', 'audio', 'llm', 'runninghub', 'runninghub-wallet',
   'resize', 'upscale', 'grid-crop', 'remove-bg', 'combine',
   'frame-extractor',
   'upload',

@@ -89,6 +89,8 @@ const SPECIFIC_NODES: Record<string, any> = {
   audio: AudioNode,
   llm: LLMNode,
   runninghub: RunningHubNode,
+  // RH 钱包应用：复用 RunningHubNode，但节点内部会根据 type 识别并使用独立 APIKEY（rhWalletApiKey）
+  'runninghub-wallet': RunningHubNode,
   'rh-config': RhConfigNode,
   // Special (5)
   'multi-angle-3d': PresetImageNode,
@@ -162,7 +164,7 @@ const INITIAL_DATA: Record<string, Record<string, any>> = {
 const EXECUTABLE_NODE_TYPES = new Set<string>([
   'image', 'edit',
   'multi-angle-3d', 'panorama-720', 'penguin-portrait',
-  'video', 'seedance', 'audio', 'llm', 'runninghub',
+  'video', 'seedance', 'audio', 'llm', 'runninghub', 'runninghub-wallet',
   'resize', 'upscale', 'grid-crop', 'remove-bg', 'combine',
   'frame-extractor',
   'upload',

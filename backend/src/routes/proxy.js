@@ -1876,12 +1876,27 @@ router.post('/audio/upload', audioUpload.single('file'), async (req, res) => {
 // 协议:POST /task/openapi/ai-app/run + POST /task/openapi/outputs
 // API Key 取自 settings.rhApiKey（与 settings.js / 前端 ApiSettings 字段保持一致；
 // 历史代码误写为 runninghubApiKey 导致永远读不到，已修正）
+// useWallet=true 时使用 settings.rhWalletApiKey（RH 企业级共享 APIKEY）代替
 // ========================================================================
+// 统一选 key 工具，useWallet=true 走 rhWalletApiKey，其余保持原逻辑。
+function pickRhApiKey(settings, useWallet) {
+  if (useWallet) {
+    return settings?.rhWalletApiKey || '';
+  }
+  return settings?.rhApiKey || settings?.runninghubApiKey || '';
+}
+function missingRhKeyError(useWallet) {
+  if (useWallet) {
+    return '未配置 RH 钱包 APIKEY（请在设置中填写 RH 钱包 APIKEY — RH 企业级共享 APIKEY）';
+  }
+  return '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）';
+}
+
 router.post('/runninghub/submit', async (req, res) => {
   const settings = loadRawSettings();
-  const apiKey = settings?.rhApiKey || settings?.runninghubApiKey;
-  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）' });
-  const { webappId, nodeInfoList, instanceType } = req.body || {};
+  const { webappId, nodeInfoList, instanceType, useWallet } = req.body || {};
+  const apiKey = pickRhApiKey(settings, !!useWallet);
+  if (!apiKey) return res.status(400).json({ success: false, error: missingRhKeyError(!!useWallet) });
   if (!webappId) return res.status(400).json({ success: false, error: 'webappId 必填' });
   try {
     const body = { apiKey, webappId, nodeInfoList: nodeInfoList || [] };
@@ -1905,8 +1920,9 @@ router.post('/runninghub/submit', async (req, res) => {
 
 router.get('/runninghub/query', async (req, res) => {
   const settings = loadRawSettings();
-  const apiKey = settings?.rhApiKey || settings?.runninghubApiKey;
-  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）' });
+  const useWallet = String(req.query.wallet || '') === '1';
+  const apiKey = pickRhApiKey(settings, useWallet);
+  if (!apiKey) return res.status(400).json({ success: false, error: missingRhKeyError(useWallet) });
   const taskId = String(req.query.taskId || '').trim();
   if (!taskId) return res.status(400).json({ success: false, error: 'taskId 必填' });
   try {
@@ -2002,8 +2018,9 @@ router.get('/runninghub/query', async (req, res) => {
 // ----------------------------------------------------------------
 router.post('/runninghub/upload-asset', express.json({ limit: '20mb' }), async (req, res) => {
   const settings = loadRawSettings();
-  const apiKey = settings?.rhApiKey || settings?.runninghubApiKey;
-  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）' });
+  const useWallet = !!(req.body && req.body.useWallet);
+  const apiKey = pickRhApiKey(settings, useWallet);
+  if (!apiKey) return res.status(400).json({ success: false, error: missingRhKeyError(useWallet) });
   const url = String(req.body?.url || '').trim();
   if (!url) return res.status(400).json({ success: false, error: 'url 必填' });
   try {
@@ -2071,8 +2088,9 @@ router.post('/runninghub/upload-asset', express.json({ limit: '20mb' }), async (
 // 获取 AI 应用信息(nodeInfoList 等)
 router.get('/runninghub/app-info', async (req, res) => {
   const settings = loadRawSettings();
-  const apiKey = settings?.rhApiKey || settings?.runninghubApiKey;
-  if (!apiKey) return res.status(400).json({ success: false, error: '未配置 RunningHub API Key（请在设置中填写 RunningHub API Key）' });
+  const useWallet = String(req.query.wallet || '') === '1';
+  const apiKey = pickRhApiKey(settings, useWallet);
+  if (!apiKey) return res.status(400).json({ success: false, error: missingRhKeyError(useWallet) });
   const webappId = String(req.query.webappId || '').trim();
   if (!webappId) return res.status(400).json({ success: false, error: 'webappId 必填' });
   try {

@@ -54,6 +54,8 @@ export const NODE_PORTS: Record<string, NodePorts> = {
 
   // ========== RH ==========
   runninghub: { inputs: ['text', 'image', 'video', 'audio', 'config'], outputs: ['image', 'video'] },
+  // RH 钱包应用：端口语义与 runninghub 一致，仅是提交时使用独立 APIKEY
+  'runninghub-wallet': { inputs: ['text', 'image', 'video', 'audio', 'config'], outputs: ['image', 'video'] },
   // RhConfigNode 阶段 B 通用化：可接受任意上游节点产出的
   // text / image / video / audio（提交时由 RunningHubNode 负责调 /upload-asset 转 fileName）
   'rh-config': { inputs: ['text', 'image', 'video', 'audio'], outputs: ['config'] },

@@ -21,8 +21,9 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set) => ({
-      theme: 'dark',
-      style: 'tech',
+      // 默认主题：像素风 + 白天模式（跟随风格联动）
+      theme: 'light',
+      style: 'pixel',
       toggleTheme: () => set((state) => ({ theme: state.theme === 'dark' ? 'light' : 'dark' })),
       setTheme: (theme) => set({ theme }),
       // 切换风格时联动默认模式:科技风默认深色、像素风默认浅色(切后用户仍可手动改)

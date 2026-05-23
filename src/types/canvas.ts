@@ -13,6 +13,7 @@ export type NodeType =
   | 'audio'
   | 'llm'
   | 'runninghub'
+  | 'runninghub-wallet'
   | 'rh-config'
   // Special (5)
   | 'multi-angle-3d'
@@ -106,6 +107,9 @@ export interface ApiSettings {
   zhenzhenBaseUrl: string; // 锁定 https://ai.t8star.org
   rhApiKey: string;
   rhBaseUrl: string; // https://www.runninghub.cn
+  // RH 钱包应用专用 APIKEY（RH 企业级共享 APIKEY）——
+  // 仅供 runninghub-wallet 节点提交使用，不会被默认 RunningHub 节点调用
+  rhWalletApiKey: string;
   llmApiKey: string;
   llmBaseUrl: string; // 锁定 https://ai.t8star.org
   // 分类 API Key（留空时 fallback 到 zhenzhenApiKey）

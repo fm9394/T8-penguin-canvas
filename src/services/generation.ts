@@ -689,11 +689,15 @@ export async function uploadAudioForSuno(
 
 // ========================================================================
 // RunningHub 工作流(异步)
+// useWallet=true 表示使用 RH 钱包应用专用 APIKEY（settings.rhWalletApiKey）提交，
+// 后端会根据该标志选取 settings.rhWalletApiKey 代替默认 settings.rhApiKey。
 // ========================================================================
 export interface RhSubmitRequest {
   webappId: string;
   nodeInfoList?: Array<{ nodeId: string; fieldName: string; fieldValue: any }>;
   instanceType?: string;
+  /** true = 使用 RH 钱包应用专用 APIKEY 提交 */
+  useWallet?: boolean;
 }
 
 export async function submitRh(req: RhSubmitRequest): Promise<{ taskId: string }> {
@@ -714,15 +718,17 @@ export interface RhQueryResult {
   code?: number;
 }
 
-export async function queryRh(taskId: string): Promise<RhQueryResult> {
-  const r = await fetch(`/api/proxy/runninghub/query?taskId=${encodeURIComponent(taskId)}`);
+export async function queryRh(taskId: string, useWallet = false): Promise<RhQueryResult> {
+  const url = `/api/proxy/runninghub/query?taskId=${encodeURIComponent(taskId)}${useWallet ? '&wallet=1' : ''}`;
+  const r = await fetch(url);
   const data = await r.json();
   if (!r.ok || !data.success) throw new Error(data?.error || `HTTP ${r.status}`);
   return data.data;
 }
 
-export async function fetchRhAppInfo(webappId: string): Promise<any> {
-  const r = await fetch(`/api/proxy/runninghub/app-info?webappId=${encodeURIComponent(webappId)}`);
+export async function fetchRhAppInfo(webappId: string, useWallet = false): Promise<any> {
+  const url = `/api/proxy/runninghub/app-info?webappId=${encodeURIComponent(webappId)}${useWallet ? '&wallet=1' : ''}`;
+  const r = await fetch(url);
   const data = await r.json();
   if (!r.ok || !data.success) throw new Error(data?.error || `HTTP ${r.status}`);
   return data.data;
@@ -730,13 +736,14 @@ export async function fetchRhAppInfo(webappId: string): Promise<any> {
 
 /**
  * 上传任意本地/远程素材到 RunningHub，拿到内部 fileName。
- * 用于 RhConfigNode 中 valueType=image|video|audio 的条目提交前的资源转换。
+ * 用于 RhConfigNode / RunningHubNode 中 valueType=image|video|audio 的条目提交前的资源转换。
+ * useWallet=true 时使用 RH 钱包应用专用 APIKEY。
  */
-export async function uploadRhAsset(url: string): Promise<{ fileName: string; fileType: string }> {
+export async function uploadRhAsset(url: string, useWallet = false): Promise<{ fileName: string; fileType: string }> {
   const r = await fetch('/api/proxy/runninghub/upload-asset', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url }),
+    body: JSON.stringify({ url, useWallet }),
   });
   const data = await r.json();
   if (!r.ok || !data.success) throw new Error(data?.error || `HTTP ${r.status}`);

@@ -4074,490 +4074,88 @@ console.log('[RH/resolve] override field', fieldName, 'from', v, '→ upstream',
 
 ---
 
-## 43. 顶部推广按钮组 + 浮层 1.5x + 像素风字体栈修复 + ApiSettings RH 外链 (v1.1.0+ / 2026-05-23)
+## 45. 默认主题切到像素风 + RH 钱包应用节点 + RH 钱包独立 APIKEY（v1.1.x）
 
-本章记录顶部工具条 UI 增量改造与全局字体栈一致性修复，对应 features.json `phase25`。
+### 45.1 用户需求
 
-### 43.1 顶部右侧五连发推广按钮
+1. 默认模式从「科技风(tech) + 暗色(dark)」改成「像素风(pixel) + 白天(light)」。
+2. 侧栏隐藏 `rh-config`「RH 配置」节点（节点本体保留以兼容老画布）。
+3. 复制 `runninghub` 节点逻辑，新增节点 `runninghub-wallet`，标签「RH钱包应用」，归 RH 分类。
+4. APIKey 设置面板在 RunningHub 与 LLM 之间插入新设置项「RH 钱包 APIKEY」，提示文案：
+   `注意：本节点用于RH钱包应用，需要设置RH企业级-共享APIKEY`
+5. 「RH钱包应用」节点的所有 RH 调用（submit/query/app-info/upload-asset）必须用 `rhWalletApiKey`，与默认 `rhApiKey` 完全隔离。
+6. **未明确指令前不允许打包** —— 这是一条永久规则。
 
-[App.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/App.tsx) 顶部右侧从原「在线画布 / 视频教程」扩展为 5 个推广胶囊：
+### 45.2 改造文件清单
 
-| 序号 | 文字 | 像素风色 | 科技风色 | 行为 |
-|------|------|----------|----------|------|
-| 1 | 最新应用 | `px-btn--peach`(橙桃) | 橙色渐变 | 点击展开浮层(国内站/海外站/RH ApiKey) |
-| 2 | 贞贞工坊 | `px-btn--violet`(紫) | 紫色渐变 | 点击展开浮层(海外站/Discord/恢复注册公告) |
-| 3 | 视频教程 | `px-btn--mint`(薄荷) | 薄荷色 | 点击展开浮层(B 站/YouTube/关注 T8 提示) |
-| 4 | YouTube 订阅 | `px-btn--mint` | 薄荷色 | 直接 target=_blank 跳转 |
-| 5 | 在线画布 | 原色 | 原色 | 点击展开浮层(双主题美化复制微信号/新窗口) |
+| 文件 | 改动 |
+|------|------|
+| [src/stores/theme.ts](file:///e:/PenguinPravite/T8-penguin-canvas/src/stores/theme.ts) | 默认 `theme: 'light'` + `style: 'pixel'`（zustand persist：仅新用户/清缓存生效，老用户保留旧值） |
+| [src/config/nodeRegistry.ts](file:///e:/PenguinPravite/T8-penguin-canvas/src/config/nodeRegistry.ts) | `rh-config` 加 `hidden: true`；新增 `{ type: 'runninghub-wallet', label: 'RH钱包应用', icon: 'Wallet', color: 'violet' }` |
+| [src/types/canvas.ts](file:///e:/PenguinPravite/T8-penguin-canvas/src/types/canvas.ts) | `NodeType` 加 `'runninghub-wallet'`；`ApiSettings` 加 `rhWalletApiKey: string` |
+| [src/config/portTypes.ts](file:///e:/PenguinPravite/T8-penguin-canvas/src/config/portTypes.ts) | `'runninghub-wallet'` 端口与 `runninghub` 一致（text/image/video/audio/config → image/video） |
+| [src/components/Canvas.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/Canvas.tsx) | `SPECIFIC_NODES` 加 `'runninghub-wallet': RunningHubNode`（复用同一组件）；`EXECUTABLE_NODE_TYPES` 加 `'runninghub-wallet'` |
+| [src/components/NodeActionBar.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/NodeActionBar.tsx) | `EXECUTABLE_NODE_TYPES` 同步加 `'runninghub-wallet'` |
+| [src/components/nodes/RunningHubNode.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/RunningHubNode.tsx) | 通过 `NodeProps.type` 识别 `useWallet = type === 'runninghub-wallet'`；标题→「RH钱包应用」+ Wallet 图标 + violet 调色板；4 个 RH 调用透传 `useWallet` |
+| [src/services/generation.ts](file:///e:/PenguinPravite/T8-penguin-canvas/src/services/generation.ts) | `RhSubmitRequest` 加 `useWallet?: boolean`；`queryRh / fetchRhAppInfo / uploadRhAsset` 全部加 `useWallet=false` 形参（GET 路径加 `&wallet=1` query；POST 写进 body） |
+| [backend/src/routes/proxy.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/routes/proxy.js) | 抽 `pickRhApiKey(settings, useWallet)` 工具：`useWallet → settings.rhWalletApiKey`，否则走原 `rhApiKey \|\| runninghubApiKey`；4 处路由（submit/query/upload-asset/app-info）改用工具 + 友好错误文案 |
+| [src/stores/apiKeys.ts](file:///e:/PenguinPravite/T8-penguin-canvas/src/stores/apiKeys.ts) | `DEFAULT` 插入 `rhWalletApiKey: ''` |
+| [backend/src/routes/settings.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/routes/settings.js) | `DEFAULT_SETTINGS` 加 `rhWalletApiKey: ''`；`GET /api/settings` 脱敏列表加 `rhWalletApiKey: maskKey(...)` |
+| [src/components/ApiSettings.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/ApiSettings.tsx) | `KeyField` 联合 + `emptyMap/emptyShow` 加 `rhWalletApiKey`；`COMMON_KEYS` 在 `rhApiKey` 与 `llmApiKey` 之间插入新条目（label「RH 钱包 APIKEY」/ desc「· 用于 RH 钱包应用 · RH 企业级共享 APIKEY」/ bullet `bg-violet-400`）；表单内该项 `baseUrlNote` 设为「注意：本节点用于RH钱包应用，需要设置RH企业级-共享APIKEY」 |
 
-规范：浮层全部 `target="_blank" rel="noopener noreferrer"`，避免 window.opener 漏洞。
+### 45.3 关键设计决策
 
-### 43.2 4 个浮层整体 1.5x 缩放（CSS zoom 一招）
+#### A. 节点类型 vs 共用组件
 
-用户反馈浮层尺寸偏小。**避免逐项调字号/图标的笨方法**，改为整体加 `style={{ zoom: 1.5 }}`：
+选「同 component + type 分支」而不是「拷一份 RhWalletNode.tsx」。理由：
 
-```tsx
-<div
-  className={isPixel ? 'absolute right-0 top-full mt-2 z-[60] w-[Xpx] px-panel rounded-2xl p-3 ...' : '...'}
-  style={{ zoom: 1.5 }}
-  onMouseDown={(e) => e.stopPropagation()}
->
-```
+- RH 节点 600+ 行业务代码（webappId 拉取、媒体上游同步、resolveNodeInfoList、轮询、错误兜底等）完全相同，只是用的 APIKEY 不同。
+- 拷文件会导致后续 RH 协议升级要双向同步，长期维护负担大。
+- xyflow `NodeProps` 第二参直接含 `type`，单点判定 `const useWallet = type === 'runninghub-wallet';` 即可衍生标题/图标/配色/4 个调用的 useWallet 透传。
 
-关键：CSS `zoom` 不是标准属性，但 Chromium/WebKit 全量支持，**子元素鼠标坐标会自动换算**，比 `transform: scale()` 简单（后者要手算偏移、点击穿透、滚动条都会出问题）。
-
-### 43.3 像素风浮层圆角统一
-
-`px-panel` 默认方角，与上传图片浮层圆角(`rounded-xl`)视觉不一致。
-
-修复：4 个浮层 `isPixel` 分支补 `rounded-2xl`，对齐 `px-radius-card = 16px`：
-
-```tsx
-className={isPixel
-  ? '... px-panel rounded-2xl p-3 animate-[fadeIn_.18s_ease-out]'
-  : '...'
-}
-```
-
-### 43.4 顶部画布标题去 emoji + px-chip 副标
-
-移除 `<span>🐧</span>`。像素风用纯标题文本 + `px-chip--pink` 小徽章组合：
-
-```tsx
-{isPixel ? (
-  <>
-    <h1 className="px-title text-[14px] font-bold tracking-wide leading-none">
-      贞贞的无限画布
-    </h1>
-    <span className="px-chip px-chip--pink text-[10px]">企鹅共创版</span>
-  </>
-) : (
-  <h1 className="text-sm font-semibold">贞贞的无限画布（企鹅共创版）</h1>
-)}
-```
-
-### 43.5 像素风字体栈逐字符回退导致中文字号不齐【根因 + 修复】
-
-**症状**：「贞贞的无限画布」六个汉字大小不一致，看起来像随机抽风。
-
-**根因**：原 [theme-pixel.css](file:///e:/PenguinPravite/T8-penguin-canvas/src/styles/theme-pixel.css) 的字体栈把日文像素字体 `DotGothic16` 与英文像素字体 `Press Start 2P` 放在最前：
-
-```css
-/* ❌ 原写法 */
---px-font-pixel: "DotGothic16", "Press Start 2P", "M PLUS Rounded 1c", monospace;
-```
-
-浏览器对中文字符**逐字符回退**：
-
-- 「贞」「布」DotGothic16 不含 → 继续回退
-- 「的」「画」DotGothic16 含日文汉字假名重合字 → 用 DotGothic16 字号
-- 不同字符落到不同字体 → **同一行汉字字号参差不齐**
-
-**修复**（中文字体放最前）：
-
-```css
-/* ✅ 修复后 */
---px-font-display: "M PLUS Rounded 1c", "Noto Sans SC", "PingFang SC",
-  "Microsoft YaHei", system-ui, "DotGothic16", sans-serif;
---px-font-pixel: "M PLUS Rounded 1c", "Noto Sans SC", "PingFang SC",
-  "Microsoft YaHei", "DotGothic16", "Press Start 2P", monospace;
-```
-
-**附带修正**：[.img-edit-modal](file:///e:/PenguinPravite/T8-penguin-canvas/src/styles/theme-pixel.css) 引用了**未定义**的 `--px-font-rounded`，浏览器解析失败回退到默认字体。改为 `var(--px-font-display)`。
-
-**通用规则**：CSS 字体栈对**多语言混排**项目，必须把目标语言的标准字体放前面，把外语像素装饰字体（DotGothic16/Press Start 2P/Pixelify Sans 等）放末位作纯英文兜底。
-
-### 43.6 ApiSettings RH 行右侧注入两个外链按钮
-
-[ApiSettings.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/ApiSettings.tsx) 给 RunningHub 设置项的 `Base URL` 行右侧加两个按钮：「获取 RH APIKEY（国内）」(peach/orange)、「获取 RH APIKEY（海外）」(yellow/amber)。
-
-实现要点：`renderKey` 函数新增形参 `extras?: React.ReactNode`，`baseUrlNote` 行改为 `flex justify-between`：
-
-```tsx
-const renderKey = (
-  spec: KeySpec,
-  opts: { fallbackHint?: boolean; baseUrlNote?: string; extras?: React.ReactNode },
-) => {
-  // ...
-  {(opts.baseUrlNote || opts.extras) && (
-    <div className={`flex items-center justify-between gap-2 flex-wrap text-[11px] ${hintCls}`}>
-      {opts.baseUrlNote ? (
-        <span className="flex items-center gap-1.5">
-          <Lock size={11} /> {opts.baseUrlNote}
-        </span>
-      ) : (<span />)}
-      {opts.extras && <div className="flex items-center gap-2">{opts.extras}</div>}
-    </div>
-  )}
-};
-
-// 调用：
-{renderKey(COMMON_KEYS[1], {
-  baseUrlNote: `Base URL: ${RH_BASE}`,
-  extras: (
-    <>
-      <a href="https://www.runninghub.cn/...?inviteCode=rh-v1121" target="_blank" rel="noopener noreferrer"
-         className={isPixel ? 'px-btn px-btn--sm px-btn--peach ...' : '... orange ...'}>
-        <span>获取 RH APIKEY（国内）</span>
-        <ExternalLink size={11} className="opacity-70" />
-      </a>
-      <a href="https://www.runninghub.ai/...?inviteCode=rh-v1121" target="_blank" rel="noopener noreferrer"
-         className={isPixel ? 'px-btn px-btn--sm px-btn--yellow ...' : '... amber ...'}>
-        <span>获取 RH APIKEY（海外）</span>
-        <ExternalLink size={11} className="opacity-70" />
-      </a>
-    </>
-  ),
-})}
-```
-
-**通用模式**：给已有可复用组件加可选 `extras: ReactNode` 形参，调用方注入任意 JSX 而组件本体保持原状，是无侵入扩展的标准做法。
-
-### 43.7 全局快捷键完整清单（补充五个遗漏）
-
-features.json 末尾 `shortcuts` 段已记录 14 项，本次审计 [Canvas.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/Canvas.tsx) 与 [OutputNode.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/nodes/OutputNode.tsx) 后补录 5 项遗漏：
-
-| 快捷键 | 功能 | 代码位置 |
-|--------|------|----------|
-| **Ctrl + G** | 将选中节点快速打组（等价右键菜单 → 组合）| Canvas.tsx 全局 useEffect onKey 分支 `ctrl && key==='g'` → `handleCreateGroup(selIds)` |
-| **Alt + 拖动节点** | 复制式克隆——原节点保留在原位，新节点跟随鼠标 | Canvas.tsx onNodeDragStart `e.altKey` 分支 |
-| **Shift + 从节点 handle 拖出** | 批量重连——一次性把该 handle 已有的入边/出边整体迁移到新目标 | Canvas.tsx onConnectStart `e.shiftKey` 分支 |
-| **Shift + 拖动空白处** | 剪刀模式——沿拖动轨迹划过的所有 edge 会被删除（详见 §21 phase21）| Canvas.tsx onPaneMouseDown `e.shiftKey` 分支 |
-| **Ctrl + Enter (OutputNode 文本编辑中)** | 保存编辑并退出编辑态 | OutputNode.tsx textarea onKeyDown |
-
-以上 5 项已同步追加到 [features.json](file:///e:/PenguinPravite/T8-penguin-canvas/features.json) 的 `shortcuts` 字段。
-
-### 43.8 关键文件
-
-- [src/App.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/App.tsx)——顶部 5 个推广按钮 + 4 个浮层 + 标题重构
-- [src/styles/theme-pixel.css](file:///e:/PenguinPravite/T8-penguin-canvas/src/styles/theme-pixel.css)——字体栈中文优先 + .img-edit-modal 修正
-- [src/components/ApiSettings.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/ApiSettings.tsx)——renderKey extras 形参 + RH 行外链
-- [src/components/Canvas.tsx](file:///e:/PenguinPravite/T8-penguin-canvas/src/components/Canvas.tsx)——快捷键补录调研来源
-- [features.json](file:///e:/PenguinPravite/T8-penguin-canvas/features.json)——shortcuts 段补全 5 项 + phase25 记录本次改动
-
-### 43.9 提交链
-
-| commit | 改动点 |
-|--------|--------|
-| `0d416a3` | 视频教程 / YouTube 按钮统一 px-btn--mint |
-| `1dfe6bd` | 顶部新增「贞贞工坊」(violet) 与「最新应用」(peach) 推广按钮+浮层 |
-| `efb7750` | 4 个浮层整体 zoom 1.5x + 像素风圆角 rounded-2xl |
-| `8132097` | 顶部画布标题重构 + 像素风字体栈中文逐字回退导致字号参差修复 |
-| 本次 | ApiSettings RH 外链 + 贞贞工坊海外站 register?aff=dP7j + 文档同步 |
-
----
-
-## 44. Electron 打包 + T8ENC1 加密规范（v1.1.0 / 2026-05-23）
-
-本章是 T8-penguin-canvas **首次桌面化打包**的完整规范，对应 features.json `phase26`。设计上**参考但不照搬** `gpt-image-2-web` 项目（Python+Electron+ZZENC1+py_compile），针对本项目 **Node.js + Express + Vite/React** 体系单独裁剪：
-
-| 维度 | 参考项目 gpt-image-2-web | 本项目 T8-penguin-canvas |
-|------|--------------------------|---------------------------|
-| 后端语言 | Python (Flask) | Node.js (Express) |
-| 运行时 | python-embed-3.10 解压到 resources/ | Electron 内置 Node.js（无需额外解释器） |
-| 加密前编译 | `py_compile` → `.pyc` | `bytenode.compileFile` → `.jsc`（V8 字节码） |
-| 加密 magic | `ZZENC1\n` | `T8ENC1\n` |
-| 加密算法 | XOR + base64 + SHA256 衍生 key | AES-256-CBC + 16B 随机 IV + SHA256 衍生 key |
-| 启动方式 | spawn python.exe + 子进程 | 同进程 `require('./loader')` 后 `require` 加密入口 |
-| 前端托管 | Flask 静态 | Express `express.static(dist)` + SPA fallback |
-| 数据目录 | resources/ 同级 | `app.getPath('userData')` |
-
-### 44.1 文件总览
+#### B. `useWallet` 全链路透传
 
 ```
-electron/
-├─ main.cjs           主进程：端口探测 / 启动 logWindow / 加载 loader / require 加密入口 / 创建 BrowserWindow loadURL
-├─ preload.cjs        contextBridge 暴露 t8pc.getInfo() (packaged/port/userData/version)
-├─ loader.cjs         运行时 T8ENC1 解密 + bytenode .jsc 加载 + Module._resolveFilename 自动尝试 .t8c 后缀
-├─ encrypt.cjs        打包前：walk backend/src/**/*.js → rewriteRequires('./x' → './x.t8c') → bytenode.compileFile → encryptBuffer → build/backend-enc/<rel>.t8c
-└─ _post_build.cjs    打包后：核验 dist_electron/win-unpacked/resources/backend-enc/*.t8c + frontend/index.html，强制清除可能混入的明文 backend/src
+  RunningHubNode (type='runninghub-wallet')
+    ↓ useWallet=true
+  services/generation.ts
+    submitRh(req)            → body.useWallet           （POST）
+    queryRh(taskId, true)    → ?taskId=...&wallet=1     （GET）
+    fetchRhAppInfo(id, true) → ?webappId=...&wallet=1   （GET）
+    uploadRhAsset(url, true) → body.useWallet           （POST）
+    ↓
+  backend/proxy.js
+    pickRhApiKey(settings, useWallet)
+      useWallet === true  → settings.rhWalletApiKey
+      else                → settings.rhApiKey || settings.runninghubApiKey
 ```
 
-> ⚠️ 本项目根 `package.json` 设置了 `"type": "module"`，所有 Electron 主进程脚本必须用 `.cjs` 后缀（CommonJS），否则 Node 会按 ESM 解析导致 `require is not defined`。
+四端兼容性：未带 `useWallet` 标志（默认 false）的旧调用完全等价，零回归风险。
 
-### 44.2 T8ENC1 加密格式
+#### C. 配色与 UI 区分
 
-```
-┌────────────┬──────────────┬───────────────────────────────────────┐
-│ 7B Magic   │ 16B IV       │ AES-256-CBC 密文 (V8 字节码 .jsc 内容) │
-│ T8ENC1\n   │ randomBytes  │ ...                                    │
-└────────────┴──────────────┴───────────────────────────────────────┘
-```
+RH 钱包节点采用 `violet` 主调（`border-violet-400` / `bg-violet-500/20` / `text-violet-200`），与默认 RH 节点的 `cyan` 主调形成视觉对比；图标改用 lucide-react `Wallet`，标题渲染为「RH钱包应用」。
 
-- **Magic Header**：`Buffer.from('T8ENC1\n', 'utf8')`，7 bytes，便于 hex 工具一眼识别
-- **Key 派生**：`crypto.createHash('sha256').update('T8-penguin-canvas-T8star-2026').digest()` → 32 字节 AES key
-- **IV**：每次加密 `crypto.randomBytes(16)`，内嵌于密文头，**避免相同明文产出相同密文**（XOR 方案做不到）
-- **算法**：AES-256-CBC（[loader.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/loader.cjs#L33-L48)）
+#### D. 老画布兼容
 
-核心函数（必须 main / encrypt / loader 三处保持完全一致）：
+- 已存画布若有 `rh-config` 节点 → `hidden: true` 仅从 Sidebar 入口隐藏，`NODE_REGISTRY` 仍保留 `'rh-config': RhConfigNode` 注册，节点照常渲染。
+- 已存 `runninghub` 节点不受影响：`useWallet=false` 走原路径。
 
-```js
-const MAGIC = Buffer.from('T8ENC1\n', 'utf8');
-const KEY = crypto.createHash('sha256').update('T8-penguin-canvas-T8star-2026').digest();
-function encryptBuffer(plain) {
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipheriv('aes-256-cbc', KEY, iv);
-  return Buffer.concat([MAGIC, iv, cipher.update(plain), cipher.final()]);
-}
-function decryptBuffer(enc) {
-  if (!enc.slice(0, MAGIC.length).equals(MAGIC)) throw new Error('missing magic');
-  const iv = enc.slice(MAGIC.length, MAGIC.length + 16);
-  const decipher = crypto.createDecipheriv('aes-256-cbc', KEY, iv);
-  return Buffer.concat([decipher.update(enc.slice(MAGIC.length + 16)), decipher.final()]);
-}
-```
+### 45.4 永久规则（重点）
 
-### 44.3 bytenode 字节码与 V8 版本绑定（最重要的坑）
+> **未经用户明确指令（"打包"/"build"/"dist"/"发版"），不允许主动执行任何打包动作（npm run dist / dist:dir / electron 打包等）。代码改完仅做 tsc 编译校验 + 视情况 git commit/push。**
 
-bytenode 编译产出的 `.jsc` 是 **V8 cached data**，与运行时 V8 版本**强绑定**。
+该规则同步写入永久记忆（task_flow_experience 类目「禁止主动打包规则」）。
 
-- ❌ 用 plain Node 运行 `node electron/encrypt.cjs` → 产出的 `.jsc` 在 Electron 33 下加载会**直接崩溃**（`Bad magic number`）
-- ✅ 必须用 Electron 自带的 Node 来跑：`electron electron/encrypt.cjs`
+### 45.5 验收清单
 
-[encrypt.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/encrypt.cjs#L112-L135) 内置检测：
-
-```js
-if (!process.versions.electron) {
-  console.warn('[encrypt] WARNING: 该脚本未在 Electron 下执行! V8 版本不匹配会导致打包后崩溃。');
-}
-main();
-// Electron 环境下事件循环不会自动退出 → 必须主动 app.exit()
-if (process.versions.electron) require('electron').app.exit(0);
-else process.exit(0);
-```
-
-`package.json` 的 `"encrypt"` 脚本因此写成：
-
-```json
-"encrypt": "electron electron/encrypt.cjs"
-```
-
-而不是 `"node electron/encrypt.cjs"`。
-
-### 44.4 require 重写：保持相对路径不变
-
-后端源码大量 `require('./config')` / `require('./routes/canvas')`。加密后磁盘上不再有 `.js`，必须把 require 改写为带 `.t8c` 后缀，并在运行时通过 `require.extensions['.t8c']` hook 解密。
-
-[encrypt.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/encrypt.cjs#L51-L63) 的核心改写：
-
-```js
-function rewriteRequires(src) {
-  return src.replace(
-    /require\((['"])(\.\.?\/[^'"]+)\1\)/g,
-    (m, q, p) => {
-      if (/\.(t8c|json)$/.test(p)) return m;
-      const stripped = p.replace(/\.js$/, '');
-      return `require(${q}${stripped}.t8c${q})`;
-    },
-  );
-}
-```
-
-[loader.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/loader.cjs#L71-L100) 注册 `.t8c` hook 同时重写 `Module._resolveFilename` 兜底：当原始路径解析失败，自动追加 `.t8c` 再试一次。这样即使有遗漏改写也能 fallback。
-
-### 44.5 同进程加载（不 spawn 子进程）
-
-参考项目 spawn `python.exe app.py`；本项目无此必要——Electron 主进程本身就是 Node 环境，直接 `require` Express app 即可：
-
-```js
-// main.cjs
-async function startBackend() {
-  backendPort = await findFreePort(18766);
-  process.env.PORT = String(backendPort);
-  process.env.T8PC_USER_DATA = getUserDataDir();
-  process.env.T8PC_PACKAGED = isPackaged() ? '1' : '0';
-  process.env.T8PC_FRONTEND_DIST = isPackaged()
-    ? path.join(process.resourcesPath, 'frontend')
-    : path.resolve(__dirname, '..', 'dist');
-  require('./loader');                                              // 注册 .t8c hook
-  if (isPackaged()) {
-    require(path.join(process.resourcesPath, 'backend-enc', 'server.t8c'));
-  } else {
-    require(path.resolve(__dirname, '..', 'backend', 'src', 'server.js'));
-  }
-}
-```
-
-[server.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/server.js) 末尾必须 `module.exports = app`（虽然实际靠 `app.listen` 内部启动，导出方便测试与未来异常恢复）。
-
-好处：
-- 启动 1 个进程而非 2 个，**关闭主窗口 = 进程整体退出**，无僵尸 python
-- 后端日志直接合并到 Electron stdout
-- IPC 不需要跨进程，性能更好
-
-### 44.6 Express 同时托管前端 dist
-
-开发模式 Vite dev server (5180) 通过 proxy 访问后端 (18766)；打包后没有 Vite，前端必须由后端**同 origin** 提供，避免 CORS、避免端口冲突。
-
-[server.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/server.js#L73-L85) 在打包模式（`config.PACKAGED === true`）下：
-
-```js
-if (config.PACKAGED || process.env.T8PC_SERVE_FRONTEND === '1') {
-  const dist = config.FRONTEND_DIST;  // = process.env.T8PC_FRONTEND_DIST
-  if (fs.existsSync(dist)) {
-    app.use(express.static(dist));
-    // SPA fallback：除 /api /files /output /input 外都返回 index.html
-    app.get(/^(?!\/(api|files|output|input)).*/, (_req, res) => {
-      res.sendFile(path.join(dist, 'index.html'));
-    });
-  }
-}
-```
-
-BrowserWindow 直接 `loadURL('http://127.0.0.1:' + backendPort + '/')`，不是 `loadFile` ——**所有 API 路径与开发模式完全一致**，避免代码里写双份 fetch baseURL。
-
-### 44.7 数据目录迁移到 userData
-
-打包后 `resources/` 是只读的（NSIS 装到 `Program Files`），不能往里写 `data/canvas_list.json`。[config.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/config.js#L10-L19) 关键判定：
-
-```js
-const PACKAGED = process.env.T8PC_PACKAGED === '1';
-const USER_DATA_DIR = process.env.T8PC_USER_DATA || path.resolve(__dirname, '..', '..');
-const PROJECT_DIR = PACKAGED ? USER_DATA_DIR : path.resolve(__dirname, '..', '..');
-if (PACKAGED) {
-  if (!fs.existsSync(PROJECT_DIR)) fs.mkdirSync(PROJECT_DIR, { recursive: true });
-}
-```
-
-Windows 下 `app.getPath('userData')` 默认是 `%APPDATA%\T8-PenguinCanvas\`。装机后第一次启动会自动建：
-
-```
-%APPDATA%/T8-PenguinCanvas/
-├─ data/
-│  ├─ canvas_list.json
-│  ├─ settings.json
-│  └─ rh_apps.json
-├─ input/
-├─ output/
-└─ thumbnails/
-```
-
-用户卸载时 NSIS 配置 `deleteAppDataOnUninstall: false`，**保留作品**。
-
-### 44.8 electron-builder 配置要点
-
-[package.json](file:///e:/PenguinPravite/T8-penguin-canvas/package.json) 的 `build` 段重点：
-
-```json
-{
-  "asar": true,
-  "asarUnpack": ["node_modules/sharp/**/*", "node_modules/@img/**/*"],
-  "compression": "store",
-  "files": [
-    "electron/main.cjs", "electron/preload.cjs", "electron/loader.cjs",
-    "package.json", "node_modules/**/*",
-    "!backend/**/*",   "!src/**/*",
-    "!data/**/*",      "!input/**/*", "!output/**/*", "!thumbnails/**/*",
-    "!dist_electron/**/*", "!build/**/*"
-  ],
-  "extraResources": [
-    { "from": "build/backend-enc", "to": "backend-enc" },
-    { "from": "dist",              "to": "frontend"    }
-  ],
-  "win": { "target": [{ "target": "nsis", "arch": ["x64"] }] },
-  "nsis": {
-    "oneClick": false, "allowToChangeInstallationDirectory": true,
-    "shortcutName": "贞贞的无限画布", "createDesktopShortcut": true,
-    "deleteAppDataOnUninstall": false
-  }
-}
-```
-
-关键决策：
-
-- **`asar: true`** + `"!backend/**/*"`：明文 `backend/src/*.js` **绝不会**进 asar，只有加密后的 `build/backend-enc/*.t8c` 通过 `extraResources` 进 `resources/backend-enc/`
-- **`asarUnpack: sharp`**：sharp 是原生 `.node`，必须解包到 `resources/app.asar.unpacked/node_modules/sharp/`，否则 require 失败
-- **`compression: "store"`**：不压缩，**安装速度快 10x**，代价是体积大约 +200MB；对桌面工具型应用更友好
-- **`postinstall: electron-builder install-app-deps`**：用户拿到源码 `npm install` 后会自动 rebuild sharp 适配 Electron ABI
-- **`!node_modules/electron/**/*` + `!node_modules/electron-builder/**/*`**：这两个是 dev 依赖巨型包，必须排除
-
-### 44.9 完整打包流程
-
-```bash
-# 一次性环境准备
-npm install                         # 安装根依赖 + 自动 install-app-deps rebuild sharp
-
-# 开发态调试 Electron
-npm run electron:dev                # 直接 electron electron/main.cjs (dev 模式)
-
-# 仅打 dist 目录(测试,不出 NSIS)
-npm run dist:dir
-# = npm run build              vite 产出 dist/
-# + npm run encrypt            electron electron/encrypt.cjs → build/backend-enc/*.t8c
-# + electron-builder --dir     dist_electron/win-unpacked/
-# + node electron/_post_build.cjs   核验 + 清明文
-
-# 出正式安装包
-npm run dist                        # 同上 + 产出 dist_electron/T8-PenguinCanvas-Setup-1.1.0.exe
-```
-
-产物结构（核验通过的 win-unpacked/）：
-
-```
-dist_electron/win-unpacked/
-├─ T8-PenguinCanvas.exe
-├─ resources/
-│  ├─ app.asar                                  含 electron/*.cjs + node_modules
-│  ├─ app.asar.unpacked/node_modules/sharp/...  原生模块
-│  ├─ backend-enc/                              加密后端字节码
-│  │  ├─ server.t8c
-│  │  ├─ config.t8c
-│  │  └─ routes/{canvas,settings,proxy,files,imageOps}.t8c
-│  └─ frontend/                                 前端 dist 静态
-│     ├─ index.html
-│     └─ assets/
-└─ ...
-```
-
-### 44.10 跨机器可移植性清单（用户能直接打开）
-
-参考项目要把 python-embed 整个塞进 resources，本项目省掉这一步——但仍要保证以下都进了 asar：
-
-| 必备 | 来源 | 在产物中的位置 |
-|------|------|----------------|
-| Express / cors / multer | 根 `dependencies` | `app.asar/node_modules/` |
-| sharp（原生） | 根 `dependencies` + `asarUnpack` | `app.asar.unpacked/node_modules/sharp/` |
-| bytenode（解密时 require） | 根 `dependencies` | `app.asar/node_modules/` |
-| 加密后端 | `extraResources` | `resources/backend-enc/` |
-| 前端 dist | `extraResources` | `resources/frontend/` |
-| Electron 自身 Node | electron-builder 自动 | `T8-PenguinCanvas.exe` 内嵌 |
-
-> 故意把 `cors / express / multer / sharp` 从 `backend/package.json` 提到根 `dependencies`——electron-builder 只看根 `package.json` 的 `dependencies` 字段决定要打包哪些 node_modules，**子目录的 package.json 它不读**。这是本项目专用的取舍（因为打包后整个后端在 root scope 运行）。
-
-### 44.11 安全模型与限制
-
-本方案的目标是 **「让一般技术爱好者无法直接读到后端业务源码」**，不是军用级保护：
-
-- ✅ 磁盘上不存在明文 `.js`，所有后端源码都是 AES 密文
-- ✅ 字节码经过 V8 编译后再加密，反编译需要先解密 + 再处理 V8 字节码（门槛极高）
-- ✅ 临时目录的 `.jsc` 是 V8 字节码（非可读源码），即使被读取也很难还原
-- ⚠️ 决心强的逆向者可以通过 hook electron 自带 Node 的 `vm.Script` 拿到运行时源码——这是任何 Electron App 的共性，加固成本与价值不成比例
-- ⚠️ `PASSPHRASE` 编码在 [loader.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/loader.cjs#L25)；强逆向者可从 asar 里抠出。**本质上是"门把手"而非"保险柜"**
-
-如需进一步加固，未来可考虑：动态密钥（机器指纹派生）、native loader（C++ N-API 写解密器并混淆）、strict CSP 阻止 DevTools 注入等——目前 v1.1.0 不做。
-
-### 44.12 关键文件
-
-- [electron/main.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/main.cjs)
-- [electron/preload.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/preload.cjs)
-- [electron/loader.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/loader.cjs)
-- [electron/encrypt.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/encrypt.cjs)
-- [electron/_post_build.cjs](file:///e:/PenguinPravite/T8-penguin-canvas/electron/_post_build.cjs)
-- [backend/src/config.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/config.js) ——PACKAGED / USER_DATA_DIR / FRONTEND_DIST
-- [backend/src/server.js](file:///e:/PenguinPravite/T8-penguin-canvas/backend/src/server.js) ——`--port` CLI / SPA fallback / `module.exports = app`
-- [package.json](file:///e:/PenguinPravite/T8-penguin-canvas/package.json) ——`main: electron/main.cjs` / scripts / build 配置块
-- [.gitignore](file:///e:/PenguinPravite/T8-penguin-canvas/.gitignore) ——排除 dist_electron/ build/backend-enc/ *.t8c *.jsc
-
-### 44.13 排错锦囊
-
-| 现象 | 根因 | 解决 |
-|------|------|------|
-| 启动后白屏，console 报 `Bad magic number` | bytenode 用了 plain Node 而非 Electron 编译 | 改用 `electron electron/encrypt.cjs` |
-| `Cannot find module './config'` | rewriteRequires 没生效或 .t8c hook 未注册 | 检查 main.cjs 是否在 require 加密入口前先 require('./loader') |
-| `require is not defined in ES module scope` | electron/*.js 被当 ESM 解析 | 全部改成 `.cjs` 扩展名（已落实） |
-| sharp `was compiled against a different Node.js version` | sharp 没 rebuild | 跑 `npm run postinstall` 或 `electron-builder install-app-deps` |
-| 关闭主窗口后任务管理器仍有残留进程 | 同进程方案不会有，但 spawn 子进程方案需要 taskkill | 本项目用同进程已规避 |
-| 数据写入 `Program Files` 失败 | 把数据目录算到了 resources/ | 检查 config.js PROJECT_DIR 必须 = USER_DATA_DIR |
+- [x] 清缓存后默认进像素风白天模式（zustand-persist `t8-canvas-theme` 缺失时走新默认）
+- [x] 侧栏 RH 分类只看到 RunningHub + RH钱包应用（无 RH 配置）
+- [x] RH钱包应用节点拖入画布渲染为 violet 主题 + 标题「RH钱包应用」
+- [x] 设置面板 RH 与 LLM 之间出现「RH 钱包 APIKEY」+ 紫色 bullet + 钱包说明文案
+- [x] RH钱包应用节点 webappId 搜索、表单提交、轮询、上传素材 4 个动作全部使用 `rhWalletApiKey`，未配置时报「未配置 RH 钱包 APIKEY...」专属错误
+- [x] 默认 RunningHub 节点行为零变化（`useWallet=false` 路径与历史一致）
+- [x] `npx tsc --noEmit` 通过；后端 `node -e "require('./backend/src/routes/proxy.js')"` 加载 OK
 
 ---
 
