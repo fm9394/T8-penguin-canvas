@@ -21,8 +21,6 @@ const DEFAULT: ApiSettings = {
   zhenzhenBaseUrl: FIXED_ZHENZHEN_BASE,
   rhApiKey: '',
   rhBaseUrl: RH_BASE,
-  // RH 钱包应用专用 APIKEY（RH 企业级共享 APIKEY）
-  rhWalletApiKey: '',
   llmApiKey: '',
   llmBaseUrl: FIXED_ZHENZHEN_BASE,
   // 分类独立 Key（留空时 fallback 到 zhenzhenApiKey）

@@ -116,8 +116,9 @@ const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
   const pollTimer = useRef<number | null>(null);
   const [fetchingInfo, setFetchingInfo] = useState(false);
 
-  // 节点双背仰：runninghub-wallet 使用 RH 企业级共享 APIKEY（settings.rhWalletApiKey），
-  // 与默认 RunningHub 节点的 settings.rhApiKey 完全隔离。
+  // v1.2.9.16: 取消 rhWalletApiKey 单独字段 —— RH 钱包应用与普通 RunningHub
+  // 节点统一使用 settings.rhApiKey。useWallet 变量仅用于 UI 区分（标题/图标/配色），
+  // 不再透传给 submitRh / queryRh / fetchRhAppInfo / uploadRhAsset。
   const useWallet = type === 'runninghub-wallet';
   const titleText = useWallet ? 'RH钱包应用' : 'RunningHub';
   const TitleIcon = useWallet ? Wallet : Workflow;
@@ -372,7 +373,7 @@ const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
           v.startsWith('/files/input/') ||
           v.startsWith('/input/');
         if (isUrlLike) {
-          const r = await uploadRhAsset(v, useWallet);
+          const r = await uploadRhAsset(v);
           fieldValue = r.fileName;
         } else {
           fieldValue = v;
@@ -408,7 +409,7 @@ const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
           return;
         }
         try {
-          const r = await queryRh(tid, useWallet);
+          const r = await queryRh(tid);
           console.log('[RH/poll] taskId=', tid, 'status=', r.status, 'code=', r.code, 'urls=', r.urls?.length || 0);
           // 轮询进度写入面板：每 30s 一条 debug，避免刷屏
           if (elapsed % 6 === 0) {
@@ -480,7 +481,7 @@ const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
     }
     setFetchingInfo(true);
     try {
-      const info = await fetchRhAppInfo(webappId, useWallet);
+      const info = await fetchRhAppInfo(webappId);
       const list: any[] = info?.nodeInfoList || [];
       // 调试日志：打印原始 nodeInfoList 结构，方便后续按实际字段名/fieldType 扩充 LIST 词典
       try {
@@ -568,7 +569,6 @@ const RunningHubNode = ({ id, data, selected, type }: NodeProps) => {
         webappId,
         nodeInfoList,
         instanceType: instanceType || undefined,
-        useWallet,
       });
       console.log('[RH/submit] taskId=', r.taskId);
       logBus.success(`异步任务已提交 taskId=${r.taskId} 进入轮询…`, src);

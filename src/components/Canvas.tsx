@@ -92,7 +92,7 @@ const SPECIFIC_NODES: Record<string, any> = {
   audio: AudioNode,
   llm: LLMNode,
   runninghub: RunningHubNode,
-  // RH 钱包应用：复用 RunningHubNode，但节点内部会根据 type 识别并使用独立 APIKEY（rhWalletApiKey）
+  // RH 钱包应用：复用 RunningHubNode。v1.2.9.16 起与普通 RunningHub 节点统一使用 settings.rhApiKey
   'runninghub-wallet': RunningHubNode,
   'rh-config': RhConfigNode,
   // Special (5)

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, Eye, EyeOff, KeyRound, Loader2, Lock, Save, Settings2, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Eye, EyeOff, KeyRound, Loader2, Lock, Save, Settings2, X } from 'lucide-react';
 import { useApiKeysStore, FIXED_ZHENZHEN_BASE, RH_BASE } from '../stores/apiKeys';
 import { useThemeStore } from '../stores/theme';
 import type { ApiSettings } from '../types/canvas';
@@ -14,7 +14,6 @@ interface ApiSettingsModalProps {
 type KeyField =
   | 'zhenzhenApiKey'
   | 'rhApiKey'
-  | 'rhWalletApiKey'
   | 'llmApiKey'
   | 'gptImageApiKey'
   | 'nanoBananaApiKey'
@@ -33,8 +32,7 @@ interface KeySpec {
 
 const COMMON_KEYS: KeySpec[] = [
   { field: 'zhenzhenApiKey', label: '贞贞工坊 API Key', desc: '· 通用后备 · 用于图像/视频/音频生成', bullet: 'bg-amber-400' },
-  { field: 'rhApiKey', label: 'RunningHub API Key', desc: '· 用于 RH 工作流', bullet: 'bg-cyan-400' },
-  { field: 'rhWalletApiKey', label: 'RH 钱包 APIKEY', desc: '· 用于 RH 钱包应用 · RH 企业级共享 APIKEY', bullet: 'bg-violet-400' },
+  { field: 'rhApiKey', label: 'RunningHub API Key', desc: '· RunningHub 节点与 RH 钱包应用节点共用', bullet: 'bg-cyan-400' },
   { field: 'llmApiKey', label: 'LLM 独立 API Key', desc: '· 额度隔离 · 用于 LLM/Vision', bullet: 'bg-emerald-400' },
 ];
 
@@ -54,12 +52,12 @@ const ALL_FIELDS: KeyField[] = [
 ];
 
 const emptyMap = (): Record<KeyField, string> => ({
-  zhenzhenApiKey: '', rhApiKey: '', rhWalletApiKey: '', llmApiKey: '',
+  zhenzhenApiKey: '', rhApiKey: '', llmApiKey: '',
   gptImageApiKey: '', nanoBananaApiKey: '', mjApiKey: '', veoApiKey: '',
   grokApiKey: '', seedanceApiKey: '', sunoApiKey: '',
 });
 const emptyShow = (): Record<KeyField, boolean> => ({
-  zhenzhenApiKey: false, rhApiKey: false, rhWalletApiKey: false, llmApiKey: false,
+  zhenzhenApiKey: false, rhApiKey: false, llmApiKey: false,
   gptImageApiKey: false, nanoBananaApiKey: false, mjApiKey: false, veoApiKey: false,
   grokApiKey: false, seedanceApiKey: false, sunoApiKey: false,
 });
@@ -165,6 +163,69 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
     return '****' + s.slice(-4);
   };
 
+  // 获取 APIKey 外部链接按钮样式（双主题）
+  const linkBtnCls = isPixel
+    ? 'px-btn px-btn--mint flex items-center gap-1 text-[11px] px-2 py-1'
+    : `flex items-center gap-1 text-[11px] px-2 py-1 rounded-md transition border ${
+        isDark
+          ? 'border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-200'
+          : 'border-emerald-500/40 bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+      }`;
+  const linkBtnAltCls = isPixel
+    ? 'px-btn flex items-center gap-1 text-[11px] px-2 py-1'
+    : `flex items-center gap-1 text-[11px] px-2 py-1 rounded-md transition border ${
+        isDark
+          ? 'border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-200'
+          : 'border-cyan-500/40 bg-cyan-50 hover:bg-cyan-100 text-cyan-700'
+      }`;
+
+  const openExternal = (url: string) => {
+    try {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      // 志忘
+    }
+  };
+
+  // 每个字段费应的「获取 APIKey」按钮配置
+  const renderGetKeyButtons = (field: KeyField) => {
+    if (field === 'zhenzhenApiKey') {
+      return (
+        <button
+          type="button"
+          onClick={() => openExternal('https://ai.t8star.org/register?aff=dP7j')}
+          className={linkBtnCls}
+          title="前往贞贞工坊注册获取 APIKEY"
+        >
+          <ExternalLink size={11} /> 获取 APIKey
+        </button>
+      );
+    }
+    if (field === 'rhApiKey') {
+      return (
+        <>
+          <button
+            type="button"
+            onClick={() => openExternal('https://www.runninghub.cn/user-center/1819214514410942465/webapp?inviteCode=rh-v1121')}
+            className={linkBtnCls}
+            title="国内用户·前往 runninghub.cn 获取 APIKEY"
+          >
+            <ExternalLink size={11} /> 获取 APIKey：国内用户
+          </button>
+          <button
+            type="button"
+            onClick={() => openExternal('https://www.runninghub.ai/user-center/1819214514410942465/webapp?inviteCode=rh-v1121')}
+            className={linkBtnAltCls}
+            title="国外用户·前往 runninghub.ai 获取 APIKEY"
+          >
+            <ExternalLink size={11} /> 国外用户
+          </button>
+        </>
+      );
+    }
+    return null;
+  };
+
   // 渲染单个 Key 表项
   const renderKey = (spec: KeySpec, opts: { fallbackHint?: boolean; baseUrlNote?: string }) => {
     const f = spec.field;
@@ -205,9 +266,14 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
             {shows[f] ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
         </div>
-        {opts.baseUrlNote && (
-          <div className={`flex items-center gap-1.5 text-[11px] ${hintCls}`}>
-            <Lock size={11} /> {opts.baseUrlNote}
+        {(opts.baseUrlNote || renderGetKeyButtons(spec.field)) && (
+          <div className={`flex items-center gap-2 flex-wrap text-[11px] ${hintCls}`}>
+            {opts.baseUrlNote && (
+              <span className="flex items-center gap-1.5">
+                <Lock size={11} /> {opts.baseUrlNote}
+              </span>
+            )}
+            {renderGetKeyButtons(spec.field)}
           </div>
         )}
       </div>
@@ -266,11 +332,10 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
 
         {/* 表单 */}
         <div className="p-5 space-y-5 overflow-y-auto">
-          {/* 三套通用 Key + RH 钱包专用 Key */}
+          {/* 三套通用 Key */}
           {renderKey(COMMON_KEYS[0], { baseUrlNote: `Base URL 锁定: ${FIXED_ZHENZHEN_BASE}` })}
           {renderKey(COMMON_KEYS[1], { baseUrlNote: `Base URL: ${RH_BASE}` })}
-          {renderKey(COMMON_KEYS[2], { baseUrlNote: '注意：本节点用于RH钱包应用，需要设置RH企业级-共享APIKEY' })}
-          {renderKey(COMMON_KEYS[3], { baseUrlNote: `Base URL 锁定: ${FIXED_ZHENZHEN_BASE} (与贞贞同地址, Key 独立)` })}
+          {renderKey(COMMON_KEYS[2], { baseUrlNote: `Base URL 锁定: ${FIXED_ZHENZHEN_BASE} (与贞贞同地址, Key 独立)` })}
 
           {/* 分类独立 Key（默认折叠，点击展开 —— 新手友好） */}
           <div className={`pt-3 border-t ${isPixel ? 'border-[var(--px-ink)]/30' : isDark ? 'border-white/10' : 'border-black/10'}`}>
