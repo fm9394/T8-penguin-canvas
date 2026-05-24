@@ -63,6 +63,8 @@ import DrawingBoardNode from './nodes/DrawingBoardNode';
 import BrowserNode from './nodes/BrowserNode';
 import FrameExtractorNode from './nodes/FrameExtractorNode';
 import FramePairNode from './nodes/FramePairNode';
+import LoopNode from './nodes/LoopNode';
+import PickFromSetNode from './nodes/PickFromSetNode';
 import UploadNode from './nodes/UploadNode';
 import OutputNode from './nodes/OutputNode';
 import GroupBoxNode from './nodes/GroupBoxNode';
@@ -105,6 +107,8 @@ const SPECIFIC_NODES: Record<string, any> = {
   'image-compare': ImageCompareNode,
   'frame-extractor': FrameExtractorNode,
   'frame-pair': FramePairNode,
+  loop: LoopNode,
+  'pick-from-set': PickFromSetNode,
   resize: ResizeNode,
   combine: CombineNode,
   'remove-bg': RemoveBgNode,
@@ -159,6 +163,10 @@ const INITIAL_DATA: Record<string, Record<string, any>> = {
     history: [],
   },
   upload: { uploadType: null },
+  // 循环器: 默认串联 + image kind
+  loop: { mode: 'serial', kind: 'image', outputs: [], progress: { done: 0, total: 0, ok: 0, fail: 0 } },
+  // 从合集获取: 默认 image + 第 1 个
+  'pick-from-set': { pickKind: 'image', pickIndex: 1 },
 };
 
 // 可被“批量运行”调起的节点类型集合
@@ -170,6 +178,8 @@ const EXECUTABLE_NODE_TYPES = new Set<string>([
   'resize', 'upscale', 'grid-crop', 'remove-bg', 'combine',
   'frame-extractor', 'frame-pair',
   'upload',
+  // v1.2.8 工具节点 (循环器 / 从合集获取)
+  'loop', 'pick-from-set',
 ]);
 
 // 网格吸附步长 / 对齐阈值(世界坐标)
@@ -1889,7 +1899,8 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   const autoOutputProcessedRef = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     if (!loaded) return;
-    const SKIP_TYPES = new Set(['output', 'groupBox', 'bulkPhantom', 'upload']);
+    // v1.2.8.2: 'pick-from-set' 是中转节点 (从合集取一个供下游), 不应被自动挂 OutputNode
+    const SKIP_TYPES = new Set(['output', 'groupBox', 'bulkPhantom', 'upload', 'pick-from-set']);
 
     const toAddNodes: Node[] = [];
     const toAddEdges: Edge[] = [];
@@ -1899,6 +1910,10 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       const t = n.type as string;
       if (!t || SKIP_TYPES.has(t)) continue;
       const d = (n.data as any) || {};
+      // v1.2.8.2: 循环器仅在完成后才让 autoOutput 处理, 避免运行中注入 items[i] 时被误认为
+      // “已生产产物” 并创建个空的 OutputNode。在 status='success' 时 d.imageUrls/videoUrls/audioUrls
+      // 数组才是最终聚合产物, 交给 autoOutput 判并拆为 N 个 OutputNode (每行 3 个网格)。
+      if (t === 'loop' && d?.status !== 'success') continue;
 
       // 提取输出项 (去重 + 过滤 + 同类型内序号)
       const seen = new Set<string>();
@@ -1936,10 +1951,14 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       }
       if (Array.isArray(d.generatedImages)) d.generatedImages.forEach(pushImg);
       pushVid(d.videoUrl);
+      // v1.2.8.2: 支持 videoUrls 数组 (LoopNode 聚合多个视频产物)
+      if (Array.isArray(d.videoUrls)) d.videoUrls.forEach(pushVid);
       pushAud(d.audioUrl);
       // Suno / AudioNode 双轨输出口: audioUrl=轨1, audioUrl_1=轨2
       // 不取 audioUrl_1 会导致 autoOutput 只创建 1 个 OutputNode
       pushAud(d.audioUrl_1);
+      // v1.2.8.2: 支持 audioUrls 数组 (LoopNode 聚合多个音频产物)
+      if (Array.isArray(d.audioUrls)) d.audioUrls.forEach(pushAud);
       // 合成 items: 靠 kindIndex 让下游 OutputNode 能准确拾取对应索引的那一项
       const items: Array<{ kind: 'image' | 'video' | 'audio'; url: string; kindIndex: number }> = [
         ...imgs.map((url, i) => ({ kind: 'image' as const, url, kindIndex: i })),

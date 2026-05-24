@@ -74,6 +74,11 @@ export const NODE_PORTS: Record<string, NodePorts> = {
   'frame-extractor': { inputs: ['video'], outputs: ['image'] },
   // 首尾帧获取: 视频抽首/尾两帧 → 双 source handle (id=first/last) 输出 image
   'frame-pair': { inputs: ['video'], outputs: ['image'] },
+  // 循环器 (v1.2.8): 接受 4 类素材集合 → 按 kind 输出下游驱动 (串联/并联)
+  // 输出默认按 kind 递多类型 (any 允许接任意下游执行节点)
+  loop: { inputs: ['text', 'image', 'video', 'audio'], outputs: ['text', 'image', 'video', 'audio'] },
+  // 从合集获取 (v1.2.8): 从上游集合中选中单一素材 → 输出按 kind 变化
+  'pick-from-set': { inputs: ['text', 'image', 'video', 'audio'], outputs: ['text', 'image', 'video', 'audio'] },
   resize: { inputs: ['image'], outputs: ['image'] },
   combine: { inputs: ['image'], outputs: ['image'] },
   'remove-bg': { inputs: ['image'], outputs: ['image'] },

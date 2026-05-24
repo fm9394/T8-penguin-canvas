@@ -615,43 +615,56 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
               <ImageIcon size={11} />
               <span>图像 ({collected.images.length})</span>
             </div>
-            {collected.images.map((u, i) => (
-              <div key={i} className="space-y-0.5">
-                <img
-                  src={u}
-                  alt={`图像 ${i + 1}`}
-                  className="w-full h-auto rounded block cursor-zoom-in"
-                  style={{ background: '#0008', objectFit: 'contain', maxHeight: 480 }}
-                  data-drag-source
-                  data-drag-kind="image"
-                  data-drag-url={u}
-                  data-drag-preview={u}
-                  data-drag-node-id={id}
-                  onMouseDown={(e) =>
-                    beginMaterialDrag(e, { kind: 'image', url: u, sourceNodeId: id, previewUrl: u })
-                  }
-                  onDoubleClick={(e) => {
-                    e.stopPropagation();
-                    setEditingUrl(u);
-                  }}
-                  title="双击编辑 (裁剪 / 宫格切分) · Ctrl+拖拽可送到其他节点"
-                />
-                <div className={`flex items-center gap-1 text-[10px] ${isDark ? 'text-white/40' : 'text-zinc-400'}`}>
-                  <span className="truncate flex-1" title={u}>{u.split('/').pop()}</span>
-                  <a
-                    href={u}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    download
-                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded ${
-                      isDark ? 'hover:bg-white/10 text-white/60' : 'hover:bg-black/10 text-zinc-600'
-                    }`}
-                  >
-                    <Download size={10} /> 下载
-                  </a>
+            {/* 单张：全宽大图预览；多张：3 列网格（一行最多 3 张，超过自动换行） */}
+            <div
+              className={
+                collected.images.length >= 2
+                  ? 'grid grid-cols-3 gap-1.5'
+                  : 'space-y-1'
+              }
+            >
+              {collected.images.map((u, i) => (
+                <div key={i} className="space-y-0.5">
+                  <img
+                    src={u}
+                    alt={`图像 ${i + 1}`}
+                    className="w-full h-auto rounded block cursor-zoom-in"
+                    style={{
+                      background: '#0008',
+                      objectFit: 'contain',
+                      maxHeight: collected.images.length >= 2 ? 140 : 480,
+                    }}
+                    data-drag-source
+                    data-drag-kind="image"
+                    data-drag-url={u}
+                    data-drag-preview={u}
+                    data-drag-node-id={id}
+                    onMouseDown={(e) =>
+                      beginMaterialDrag(e, { kind: 'image', url: u, sourceNodeId: id, previewUrl: u })
+                    }
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setEditingUrl(u);
+                    }}
+                    title="双击编辑 (裁剪 / 宫格切分) · Ctrl+拖拽可送到其他节点"
+                  />
+                  <div className={`flex items-center gap-1 text-[10px] ${isDark ? 'text-white/40' : 'text-zinc-400'}`}>
+                    <span className="truncate flex-1" title={u}>{u.split('/').pop()}</span>
+                    <a
+                      href={u}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download
+                      className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded ${
+                        isDark ? 'hover:bg-white/10 text-white/60' : 'hover:bg-black/10 text-zinc-600'
+                      }`}
+                    >
+                      <Download size={10} /> 下载
+                    </a>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 

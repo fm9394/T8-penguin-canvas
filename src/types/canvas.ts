@@ -27,6 +27,8 @@ export type NodeType =
   | 'image-compare'
   | 'frame-extractor'
   | 'frame-pair'
+  | 'loop'
+  | 'pick-from-set'
   | 'resize'
   | 'combine'
   | 'remove-bg'

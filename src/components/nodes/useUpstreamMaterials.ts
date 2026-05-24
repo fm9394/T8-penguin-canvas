@@ -121,12 +121,18 @@ export function useUpstreamMaterials(nodeId: string): UpstreamMaterials {
         }
       }
 
-      // 视频
+      // 视频: 单 + 多 (v1.2.8.2: videoUrls 数组 — LoopNode 聚合多视频产物)
       pushUrl(sid, 'video', ud.videoUrl, videos);
+      if (Array.isArray(ud.videoUrls)) {
+        for (const u of ud.videoUrls) pushUrl(sid, 'video', u, videos);
+      }
 
-      // 音频 (audioUrl 主轨, audioUrl_1 副轨——AudioNode 双输出口)
+      // 音频 (audioUrl 主轨, audioUrl_1 副轨——AudioNode 双输出口, audioUrls 数组 — LoopNode 聚合)
       pushUrl(sid, 'audio', ud.audioUrl, audios);
       pushUrl(sid, 'audio', ud.audioUrl_1, audios);
+      if (Array.isArray(ud.audioUrls)) {
+        for (const u of ud.audioUrls) pushUrl(sid, 'audio', u, audios);
+      }
     }
 
     // 兜底: 一些节点把视频/音频塞在 imageUrl, 通过扩展名识别再纠正

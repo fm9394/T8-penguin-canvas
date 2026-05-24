@@ -1,7 +1,7 @@
 {
   "$schema": "本文件为 T8-penguin-canvas 节点清单防丢失锁,任何节点删减都需要在 roadmap.md 中说明并更新本文件。",
-  "version": "1.2.7",
-  "lastUpdated": "2026-05-24-v1.2.7-frame-pair-utility-node",
+  "version": "1.2.8.2",
+  "lastUpdated": "2026-05-24-v1.2.8.2-loop-ui-fix-and-multi-result-autooutput",
   "packaging": {
     "description": "Electron NSIS 桌面端打包链路(v1.2.1 起标准化, 严禁未明确指令主动打包)。完整产物拓扑: app.asar(electron/{main,loader,preload}.cjs + node_modules) + app.asar.unpacked(node_modules/sharp + @img) + resources/backend-enc/*.t8c(extraResources, asar 外) + resources/frontend(extraResources, asar 外)。前端版本号由 vite define 注入 __APP_VERSION__、Sidebar 左下角自动同步。",
     "scripts": {
@@ -158,13 +158,15 @@
     },
     "utility": {
       "label": "工具节点",
-      "count": 10,
+      "count": 12,
       "nodes": [
         { "type": "drawing-board", "label": "画板", "description": "手绘 / 涂抹", "hidden": true },
         { "type": "browser", "label": "浏览器", "description": "网页内嵌", "hidden": true },
         { "type": "image-compare", "label": "图片对比", "description": "前后对比", "hidden": true },
         { "type": "frame-extractor", "label": "抽帧", "description": "视频抽帧", "hidden": true },
         { "type": "frame-pair", "label": "首尾帧获取", "description": "v1.2.7 新增。输入一个视频节点，运行后抽取首帧与尾帧，输出 2 个 image 素材(双 source handle id=first/last)。浏览器端 video+canvas 抽帧上传 base64，双主题 (像素风糖果色/科技风玻璃)，接入运行总线可被批量运行调起" },
+        { "type": "loop", "label": "循环器", "description": "v1.2.8 新增。接多个同类型素材(text/image/video/audio)，两种模式: 串联逐个注入自身进发下游可执行子图 / 并联克隆 (N-1) 份子图并发跱发。采集输出位序位填 null，永久保留克隆节点，克隆块垂直堆叠(yOffset = i × blockH)，使用 runBus.runningIds + triggerRunMany 多节点并发触发。双主题 violet 调" },
+        { "type": "pick-from-set", "label": "从合集获取", "description": "v1.2.8 新增。从上游多素材集合中按 kind + 序号取出单一素材写入自身 data，下游通过 useUpstreamMaterials 自动拾取。默认 image+第1个，kind 切换时输出 Handle 颜色随动 PORT_COLOR 变化" },
         { "type": "resize", "label": "尺寸调整", "description": "图像尺寸调整(v1.2.0 起默认 fit=cover 裁剪铺满,FIT_OPTIONS 4 选项带中文说明 cover/contain/inside/fill;ImageOpFrame 派生节点下游连 OutputNode 时自动隐藏内部预览避免双显)" },
         { "type": "combine", "label": "合并", "description": "图像合并" },
         { "type": "remove-bg", "label": "抠图", "description": "去除背景", "hidden": true },

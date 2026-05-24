@@ -26,6 +26,8 @@ const EXECUTABLE_NODE_TYPES = new Set<string>([
   'resize', 'upscale', 'grid-crop', 'remove-bg', 'combine',
   'frame-extractor', 'frame-pair',
   'upload',
+  // v1.2.8 循环器 / 从合集获取
+  'loop', 'pick-from-set',
 ]);
 
 const BAR_GAP_PX = 8; // 与节点顶部的世界坐标系间距
