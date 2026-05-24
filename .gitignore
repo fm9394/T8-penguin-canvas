@@ -26,6 +26,10 @@ electron/*.js
 
 # 临时备份文件
 _temp_*
+# AI agent / shell 临时脚本与日志
+_*.ps1
+_*.txt
+_*.log
 
 # Dependencies
 node_modules

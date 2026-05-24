@@ -1,2 +1,0 @@
-rm '_git_log.txt'
-rm '_git_push.ps1'
