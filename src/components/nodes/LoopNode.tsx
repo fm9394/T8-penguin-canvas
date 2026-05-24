@@ -191,78 +191,52 @@ const LoopNode = (p: NodeProps) => {
     const order = topologicalSort(subNodes, subEdges, EXEC_TYPES);
     if (order.length === 0) { setError('下游链路上没有可执行节点'); update({ status: 'error', error: '无可执行节点' }); return; }
 
-    // v1.2.8.7: 清掉12.8.5/12.8.6 残留的原 OutputNode direct*Urls (避免上次跨轮累积污染本轮)
-    //         原 OutputNode 本轮只负责「动态显示当前轮」, 上一轮的快照会被克隆为独立节点保留
+    // === v1.2.9.0: 全新累积参数机制 ===
+    // 思路: 不再克隆 OutputNode 节点。改为给所有下游 EXEC + OUTPUT 节点注入 __loopAccumulate 标记,
+    //      OutputNode 检测到上游含 __loopAccumulate 时跳过 fresh 收集 (让 direct*Urls 累积值独占显示)。
+    //      LoopNode 每轮收尾读上游 fresh 产物 → 追加到 OutputNode 的 direct*Urls / directOutputText。
+    //      跑 N 轮 = OutputNode 内累积 N 张图 (不增加节点污染画布), 生成节点本身始终只显示最新一轮。
     const outputNodeIds = new Set<string>(subNodes.filter((n) => n.type === 'output').map((n) => n.id));
-    if (outputNodeIds.size > 0) {
-      rf.setNodes((prev) => prev.map((nd) => {
-        if (!outputNodeIds.has(nd.id)) return nd;
-        const od: any = nd.data || {};
-        const next: any = { ...od };
+    const execSubIds = new Set<string>(subNodes.filter((n) => EXEC_TYPES.has(n.type as string)).map((n) => n.id));
+    // 进入循环前: 仅标记下游 EXEC 节点 (让 OutputNode 跳过 fresh) + 清空 OutputNode 的累积字段。
+    //         不给 OutputNode 本身注入 __loopAccumulate ——避免下游二级 OutputNode 跳过一级 OutputNode 的 fresh 导致空显示。
+    rf.setNodes((prev) => prev.map((nd) => {
+      const isExec = execSubIds.has(nd.id);
+      const isOut = outputNodeIds.has(nd.id);
+      if (!isExec && !isOut) return nd;
+      const od: any = nd.data || {};
+      const next: any = { ...od };
+      if (isExec) next.__loopAccumulate = id;
+      if (isOut) {
         next.directImageUrls = [];
         next.directVideoUrls = [];
         next.directAudioUrls = [];
         next.directOutputText = '';
-        return { ...nd, data: next };
-      }));
-    }
+        next.directImageUrl = '';
+        next.directVideoUrl = '';
+        next.directAudioUrl = '';
+      }
+      return { ...nd, data: next };
+    }));
 
     const collected: Array<string | null> = [];
     let okCount = 0; let failCount = 0;
 
-    // v1.2.8.7: 保存上一轮源头快照, 用于下一轮开始时克隆为独立 OutputNode
-    const pendingSnapshot: Map<string, string[]> = new Map();
-    // v1.2.8.9: 克隆位置改为 X 方向横向偏移 (避免与同列垂直排列的其他 OutputNode 重叠)
-    //         FramePair 场景: first/last 两个 OutputNode 垂直排列, Y 偏移会让 first 克隆与 last 原节点重叠
-    const CLONE_X_GAP = 40;
-    const CLONE_WIDTH_EST = 360;
+    // 跨轮累积: outputNodeId → 已累积产物 (去重)
+    const accumByOutput = new Map<string, string[]>();
+    const accumTextByOutput = new Map<string, string[]>();
 
+    const pushUniq = (arr: string[], v: any) => {
+      if (typeof v !== 'string') return;
+      const s = v.trim();
+      if (!s) return;
+      if (arr.indexOf(s) === -1) arr.push(s);
+    };
+
+    // v1.2.9.0: 包 try/finally 保证 __loopAccumulate 标记总能被清除 (避免异常/取消后下游节点被永久冻住于累积模式)
+    try {
     for (let i = 0; i < items.length; i++) {
       if (cancelRef.current) break;
-
-      // === v1.2.8.7: 第 i 轮 (i>=1) 开始前, 先把上一轮的源头快照克隆为独立 OutputNode 节点 ===
-      if (i >= 1 && pendingSnapshot.size > 0 && outputNodeIds.size > 0) {
-        rf.setNodes((prev) => {
-          const additions: Node[] = [];
-          for (const outId of Array.from(outputNodeIds)) {
-            const orig = prev.find((n) => n.id === outId);
-            if (!orig) continue;
-            const snap = pendingSnapshot.get(outId) || [];
-            if (snap.length === 0) continue;
-            const cloneData: any = { ...((orig.data as any) || {}) };
-            const baseLabel = (orig.data as any)?.label || '输出素材';
-            cloneData.label = `${baseLabel} · 轮次 ${i}`;
-            // 清掉所有 direct* / 透传字段, 仅写本克隆轮对应 kind 快照
-            cloneData.directImageUrl = '';
-            cloneData.directImageUrls = [];
-            cloneData.directVideoUrl = '';
-            cloneData.directVideoUrls = [];
-            cloneData.directAudioUrl = '';
-            cloneData.directAudioUrls = [];
-            cloneData.directOutputText = '';
-            cloneData.imageUrl = '';
-            cloneData.imageUrls = [];
-            cloneData.videoUrl = '';
-            cloneData.videoUrls = [];
-            cloneData.audioUrl = '';
-            cloneData.audioUrls = [];
-            cloneData.outputText = '';
-            if (kind === 'image') cloneData.directImageUrls = snap.slice();
-            else if (kind === 'video') cloneData.directVideoUrls = snap.slice();
-            else if (kind === 'audio') cloneData.directAudioUrls = snap.slice();
-            else cloneData.directOutputText = snap.join('\n\n');
-            additions.push({
-              ...orig,
-              id: `${outId}__loop_${id}_r${i}`,
-              position: { x: orig.position.x + (CLONE_WIDTH_EST + CLONE_X_GAP) * i, y: orig.position.y },
-              selected: false,
-              data: cloneData,
-            } as Node);
-          }
-          return additions.length > 0 ? [...prev, ...additions] : prev;
-        });
-        pendingSnapshot.clear();
-      }
 
       // 1. 注入第 i 个素材到本节点 (同时 reset 下游上一轮产出, 避免老状态脱裤子)
       update({ ...buildResetPatch(kind), ...buildItemPatch(kind, items[i].url) });
@@ -280,7 +254,6 @@ const LoopNode = (p: NodeProps) => {
       // 3. 收集本轮终点产物 (取直接下游第一个的当前 data)
       let result: string | null = null;
       if (chainOk) {
-        // 子图有可能在 update 之后状态被改写，重新取最新 node
         const cur = rf.getNode(directs[0]);
         result = extractFromNode(cur, kind);
       }
@@ -288,21 +261,13 @@ const LoopNode = (p: NodeProps) => {
       if (result) okCount++; else failCount++;
       update({ outputs: [...collected], progress: { done: i + 1, total: items.length, ok: okCount, fail: failCount } });
 
-      // === v1.2.8.7: 本轮收尾——读每个 OutputNode 上游源头 (按 sourceHandle 过滤) 存入 pendingSnapshot
-      //           下一轮开始时以此快照克隆为独立 OutputNode 节点 (保留本轮成果)
-      //           原 OutputNode 透过透传机制自然显示本轮值, 不需手动写入
+      // === v1.2.9.0: 本轮收尾——读每个 OutputNode 上游 fresh (按 sourceHandle 过滤) → 追加到 accumByOutput → 写回 direct*Urls ===
       if (outputNodeIds.size > 0) {
         await new Promise<void>((r) => setTimeout(() => r(), 40));
-        pendingSnapshot.clear();
         for (const outId of Array.from(outputNodeIds)) {
           const inbound = rf.getEdges().filter((e) => e.target === outId);
-          const live: string[] = [];
-          const pushUniq = (arr: string[], v: any) => {
-            if (typeof v !== 'string') return;
-            const s = v.trim();
-            if (!s) return;
-            if (arr.indexOf(s) === -1) arr.push(s);
-          };
+          const freshUrls: string[] = [];
+          const freshTexts: string[] = [];
           for (const e of inbound) {
             const upNode = rf.getNode(e.source);
             if (!upNode) continue;
@@ -312,50 +277,71 @@ const LoopNode = (p: NodeProps) => {
               Object.prototype.hasOwnProperty.call(ud, 'firstFrameUrl') &&
               Object.prototype.hasOwnProperty.call(ud, 'lastFrameUrl');
             if (isFramePair) {
-              if (sh === 'first') pushUniq(live, ud.firstFrameUrl);
-              else if (sh === 'last') pushUniq(live, ud.lastFrameUrl);
-              else { pushUniq(live, ud.firstFrameUrl); pushUniq(live, ud.lastFrameUrl); }
+              if (sh === 'first') pushUniq(freshUrls, ud.firstFrameUrl);
+              else if (sh === 'last') pushUniq(freshUrls, ud.lastFrameUrl);
+              else { pushUniq(freshUrls, ud.firstFrameUrl); pushUniq(freshUrls, ud.lastFrameUrl); }
               continue;
             }
             if (kind === 'image') {
-              pushUniq(live, ud.imageUrl);
-              if (Array.isArray(ud.imageUrls)) ud.imageUrls.forEach((u: any) => pushUniq(live, u));
-              if (Array.isArray(ud.urls)) ud.urls.forEach((u: any) => pushUniq(live, u));
-              if (Array.isArray(ud.generatedImages)) ud.generatedImages.forEach((u: any) => pushUniq(live, u));
+              pushUniq(freshUrls, ud.imageUrl);
+              if (Array.isArray(ud.imageUrls)) ud.imageUrls.forEach((u: any) => pushUniq(freshUrls, u));
+              if (Array.isArray(ud.urls)) ud.urls.forEach((u: any) => pushUniq(freshUrls, u));
+              if (Array.isArray(ud.generatedImages)) ud.generatedImages.forEach((u: any) => pushUniq(freshUrls, u));
             } else if (kind === 'video') {
-              pushUniq(live, ud.videoUrl);
-              if (Array.isArray(ud.videoUrls)) ud.videoUrls.forEach((u: any) => pushUniq(live, u));
+              pushUniq(freshUrls, ud.videoUrl);
+              if (Array.isArray(ud.videoUrls)) ud.videoUrls.forEach((u: any) => pushUniq(freshUrls, u));
             } else if (kind === 'audio') {
-              pushUniq(live, ud.audioUrl);
-              pushUniq(live, ud.audioUrl_1);
-              if (Array.isArray(ud.audioUrls)) ud.audioUrls.forEach((u: any) => pushUniq(live, u));
+              pushUniq(freshUrls, ud.audioUrl);
+              pushUniq(freshUrls, ud.audioUrl_1);
+              if (Array.isArray(ud.audioUrls)) ud.audioUrls.forEach((u: any) => pushUniq(freshUrls, u));
             } else {
-              if (typeof ud.outputText === 'string' && ud.outputText) pushUniq(live, ud.outputText);
-              if (typeof ud.reply === 'string' && ud.reply) pushUniq(live, ud.reply);
-              if (typeof ud.text === 'string' && ud.text) pushUniq(live, ud.text);
+              if (typeof ud.outputText === 'string' && ud.outputText) pushUniq(freshTexts, ud.outputText);
+              if (typeof ud.reply === 'string' && ud.reply) pushUniq(freshTexts, ud.reply);
+              if (typeof ud.text === 'string' && ud.text) pushUniq(freshTexts, ud.text);
             }
           }
-          if (live.length > 0) pendingSnapshot.set(outId, live);
+          if (freshUrls.length > 0) {
+            const acc = accumByOutput.get(outId) || [];
+            freshUrls.forEach((u) => pushUniq(acc, u));
+            accumByOutput.set(outId, acc);
+          }
+          if (freshTexts.length > 0) {
+            const acc = accumTextByOutput.get(outId) || [];
+            freshTexts.forEach((t) => pushUniq(acc, t));
+            accumTextByOutput.set(outId, acc);
+          }
         }
+        // 写回所有 OutputNode 的 direct*Urls (累积值)
+        rf.setNodes((prev) => prev.map((nd) => {
+          if (!outputNodeIds.has(nd.id)) return nd;
+          const accUrls = accumByOutput.get(nd.id);
+          const accTexts = accumTextByOutput.get(nd.id);
+          if ((!accUrls || accUrls.length === 0) && (!accTexts || accTexts.length === 0)) return nd;
+          const od: any = nd.data || {};
+          const next: any = { ...od };
+          if (accUrls && accUrls.length > 0) {
+            if (kind === 'image') next.directImageUrls = accUrls.slice();
+            else if (kind === 'video') next.directVideoUrls = accUrls.slice();
+            else if (kind === 'audio') next.directAudioUrls = accUrls.slice();
+          }
+          if (accTexts && accTexts.length > 0) {
+            next.directOutputText = accTexts.join('\n\n');
+          }
+          return { ...nd, data: next };
+        }));
       }
     }
-
-    // v1.2.8.9: 跳出循环后额外保险——把「最后一轮」的源头快照强制写入原 OutputNode 的 direct*Urls
-    //         (避免依赖透传 useEffect 时序 —— 原节点独立显示最后一轮快照)
-    //         这样 N 轮 = (N-1) 个克隆 (保留前 N-1 轮) + 1 个原节点 (最后一轮) = N 个独立节点
-    if (outputNodeIds.size > 0 && pendingSnapshot.size > 0 && !cancelRef.current) {
-      rf.setNodes((prev) => prev.map((nd) => {
-        if (!outputNodeIds.has(nd.id)) return nd;
-        const snap = pendingSnapshot.get(nd.id) || [];
-        if (snap.length === 0) return nd;
-        const od: any = nd.data || {};
-        const next: any = { ...od };
-        if (kind === 'image') next.directImageUrls = snap.slice();
-        else if (kind === 'video') next.directVideoUrls = snap.slice();
-        else if (kind === 'audio') next.directAudioUrls = snap.slice();
-        else next.directOutputText = snap.join('\n\n');
-        return { ...nd, data: next };
-      }));
+    } finally {
+    // === v1.2.9.0: 循环结束——清除所有下游 EXEC 节点的 __loopAccumulate 标记 ===
+    //         OutputNode 恢复正常 collected 透传 (fresh + direct*Urls 累积都参与)
+    rf.setNodes((prev) => prev.map((nd) => {
+      if (!execSubIds.has(nd.id)) return nd;
+      const od: any = nd.data || {};
+      if (!od.__loopAccumulate) return nd;
+      const next: any = { ...od };
+      delete next.__loopAccumulate;
+      return { ...nd, data: next };
+    }));
     }
 
     // 4. 最终聚合到 imageUrls / urls / videoUrl... (取成功结果)

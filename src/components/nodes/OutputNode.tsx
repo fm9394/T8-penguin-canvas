@@ -159,6 +159,11 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
       const sid = (n as any)?.id || '';
       const handles = handleMap.get(sid) || new Set<string | null>([null]);
 
+      // === v1.2.9.0: 循环累积模式 —— 上游节点被 LoopNode 标记 __loopAccumulate 时,
+      //             跳过该上游的 fresh 字段收集 (让本节点 direct*Urls / directOutputText 的累积值独占显示)。
+      //             这样跨轮产物不会被生成节点「本轮覆盖」的 fresh 担换, 循环结束后标记被 LoopNode 清除, 恢复正常透传。
+      if (ud.__loopAccumulate) continue;
+
       // 文本
       pushUniqueText(out.texts, ud.outputText);
       pushUniqueText(out.texts, ud.reply);
