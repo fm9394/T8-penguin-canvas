@@ -193,10 +193,20 @@ const PickFromSetNode = (p: NodeProps) => {
       };
 
   const btnClass = isPixel
-    ? 'px-btn px-btn--peach w-full flex items-center justify-center gap-1.5 py-1.5 text-[12px]'
+    ? 'w-full flex items-center justify-center gap-1.5 py-1.5 text-[12px] font-semibold'
     : isDark
     ? 'w-full flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium disabled:opacity-50 transition-colors bg-orange-500/20 hover:bg-orange-500/30 text-orange-200 border border-orange-400/30'
     : 'w-full flex items-center justify-center gap-1.5 py-1.5 rounded text-xs font-medium disabled:opacity-50 transition-colors bg-orange-100 hover:bg-orange-200 text-orange-700 border border-orange-300';
+
+  // v1.2.8.8: pixel 主按钮 inline 样式 (方角 + peach 底色 + 硕阳线边 + 硬阴影)
+  const pixelBtnStyle: React.CSSProperties = {
+    background: 'var(--px-peach, #FFCBA4)',
+    border: '2px solid var(--px-ink, #1A1410)',
+    borderRadius: 0,
+    boxShadow: '2px 2px 0 var(--px-ink, #1A1410)',
+    color: 'var(--px-ink, #1A1410)',
+    cursor: 'pointer',
+  };
 
   const infoStyle: React.CSSProperties = isPixel
     ? {
@@ -223,10 +233,10 @@ const PickFromSetNode = (p: NodeProps) => {
     ? { background: outColor, border: '1.5px solid var(--px-ink, #1A1410)', borderRadius: 0, width: 10, height: 10 }
     : { background: outColor, border: 0 };
 
-  // kind 切按钮
+  // kind 切按钮 (v1.2.8.8: pixel 模式不再用 px-btn 类, 避免 pill 9999px 圆角与 padding 14px 被挤压变圆球)
   const kindBtnClass = (k: MaterialKind, active: boolean) =>
     isPixel
-      ? `px-btn ${active ? 'px-btn--peach' : ''} flex-1 flex items-center justify-center gap-0.5 py-1 text-[10px]`
+      ? `flex-1 flex items-center justify-center gap-1 py-1 px-1 text-[10px] font-semibold whitespace-nowrap`
       : active
       ? isDark
         ? 'flex-1 flex items-center justify-center gap-1 py-1 rounded text-[10px] font-medium bg-orange-500/30 text-orange-200 border border-orange-400/40'
@@ -234,6 +244,17 @@ const PickFromSetNode = (p: NodeProps) => {
       : isDark
       ? 'flex-1 flex items-center justify-center gap-1 py-1 rounded text-[10px] font-medium bg-white/5 hover:bg-white/10 text-white/60 border border-white/10'
       : 'flex-1 flex items-center justify-center gap-1 py-1 rounded text-[10px] font-medium bg-black/5 hover:bg-black/10 text-black/60 border border-black/10';
+
+  // v1.2.8.8: pixel kind 按钮的 inline 样式 (方角 + min-width:0 允许压缩 + cursor)
+  const pixelKindBtnStyle = (active: boolean): React.CSSProperties => ({
+    background: active ? 'var(--px-peach, #FFCBA4)' : 'var(--px-surface, #FFFFFF)',
+    border: '1.5px solid var(--px-ink, #1A1410)',
+    borderRadius: 0,
+    boxShadow: active ? '2px 2px 0 var(--px-ink, #1A1410)' : '1px 1px 0 var(--px-ink, #1A1410)',
+    color: 'var(--px-ink, #1A1410)',
+    minWidth: 0,
+    cursor: 'pointer',
+  });
 
   const inputStyle: React.CSSProperties = isPixel
     ? {
@@ -282,6 +303,7 @@ const PickFromSetNode = (p: NodeProps) => {
                 key={k}
                 type="button"
                 className={kindBtnClass(k, k === pickKind)}
+                style={isPixel ? pixelKindBtnStyle(k === pickKind) : undefined}
                 onClick={() => update({ pickKind: k, status: 'idle', error: null })}
                 title={KIND_LABEL[k]}
               >
@@ -327,7 +349,7 @@ const PickFromSetNode = (p: NodeProps) => {
           onClick={handlePick}
           disabled={status === 'running' || total === 0}
           className={btnClass}
-          style={isPixel ? { opacity: status === 'running' || total === 0 ? 0.55 : 1 } : undefined}
+          style={isPixel ? { ...pixelBtnStyle, opacity: status === 'running' || total === 0 ? 0.55 : 1 } : undefined}
         >
           {status === 'running' ? (
             <>
@@ -356,10 +378,10 @@ const PickFromSetNode = (p: NodeProps) => {
           </div>
         )}
 
-        {/* 当前素材预览 */}
+        {/* 当前素材预览 (v1.2.8.8: 拓宽高度 并让图按宽度铺满, 避免人像图只占中间 1/3 宽两侧大量留白) */}
         {currentValue && (
           <div
-            className="overflow-hidden flex items-center justify-center"
+            className="overflow-hidden flex items-center justify-center w-full"
             style={{
               border: previewBorder,
               borderRadius: isPixel ? 0 : 6,
@@ -369,15 +391,15 @@ const PickFromSetNode = (p: NodeProps) => {
                 ? 'rgba(255,255,255,.04)'
                 : 'rgba(0,0,0,.04)',
               boxShadow: isPixel ? '2px 2px 0 var(--px-ink, #1A1410)' : 'none',
-              minHeight: pickKind === 'text' ? 36 : 80,
-              maxHeight: 160,
+              minHeight: pickKind === 'text' ? 36 : 100,
+              maxHeight: 260,
             }}
           >
             {pickKind === 'image' && (
-              <img src={currentValue} alt="picked" className="max-w-full max-h-[160px] object-contain" draggable={false} />
+              <img src={currentValue} alt="picked" style={{ width: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }} draggable={false} />
             )}
             {pickKind === 'video' && (
-              <video src={currentValue} className="max-w-full max-h-[160px]" muted playsInline />
+              <video src={currentValue} style={{ width: '100%', maxHeight: 260, objectFit: 'contain', display: 'block' }} muted playsInline />
             )}
             {pickKind === 'audio' && (
               <audio src={currentValue} controls className="w-full" />
