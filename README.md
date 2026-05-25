@@ -10,7 +10,7 @@ https://www.runninghub.cn/?inviteCode=rh-v1121
 My favorite girl Go YounJung
 # 🐧 贞贞的无限画布（企鹅共创版） · T8-penguin-canvas
 
-> AI 节点画布工作流工具 · Web + Electron 桌面端｜v1.2.10.4
+> AI 节点画布工作流工具 · Web + Electron 桌面端｜v1.2.10.5
 >
 > GitHub：<https://github.com/T8mars/T8-penguin-canvas>
 
