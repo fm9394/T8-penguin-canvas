@@ -1,7 +1,7 @@
 # T8-penguin-canvas · skill.md
 
 > 项目能力 / 接口 / 文件用途速查手册。
-> 版本：v1.2.10.7 ｜ 仓库：<https://github.com/T8mars/T8-penguin-canvas>
+> 版本：v1.2.10.8 ｜ 仓库：<https://github.com/T8mars/T8-penguin-canvas>
 >
 > v1.2.1 增量（§47）：Electron 打包加密链路 3 处根因修复 + 标准化 SOP 沉淀 — bytenode .jsc loader 复刻（vm.Script + cachedData 直跑、跳过 tmpFile 二次 require）+ asar 外 .t8c 的 require MODULE_NOT_FOUND 回退 loader.cjs 自身（解析 app.asar/node_modules/express|cors|multer|sharp）+ backend/src/config.js 识别 T8PC_PACKAGED/T8PC_USER_DATA/T8PC_FRONTEND_DIST 三环境变量（数据写 userData、NODE_ENV=production）+ backend/src/server.js 打包模式 express.static + SPA 兑底（regex 排除 api/files/input/output 4 前缀）+ main.cjs 三处版本号同步 v1.2.0 + 6 项打包前必检 checklist + 完整 SOP 写入本章作为下次打包唯一参考依据。
 >
@@ -6432,5 +6432,25 @@ const baseY = srcY + srcH / 2 - groupH / 2;
 ```
 
 影响范围：3 条 autoOutput 路径（FramePair / Suno / 通用） + reorder-grid naturalBaseY。
+
+---
+
+### v1.2.10.8 · placement 向右线性扫描（rightwardScan）
+
+**用户反馈**：红框处有大片空地，但输出节点跳过它直接落到画布最右端（屏幕外）。
+
+**根因**：螺线搜索 step=80 × maxTries=64 只覆盖期望位置周围 ~400px。如果空隙在 500– 1500px 远处，螺线找不到就直接触发 fallback（放到所有节点最右侧），跳过中间大片空地。
+
+**修复**：在螺线和兜底之间插入「向右线性扫描」第二阶段：
+
+```
+搜索策略 3 阶段:
+  Pass 1: spiral (step=80, 64次, 覆盖~400px) — 找紧凑近处空位
+  Pass 2: rightwardScan (step=80, 最远3000px) — 沿自然流向右扫描空隙
+         每步尝试 Y偏移: 0 / +80 / -80 (允许微调上下)
+  Pass 3: fallback — 所有节点最右侧 + gap (仅在前两阶段都失败时触发)
+```
+
+关键代码：`rightwardScanSingle` / `rightwardScanBatch`（nodePlacement.ts）。
 
 ---

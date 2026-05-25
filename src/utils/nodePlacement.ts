@@ -244,10 +244,51 @@ function spiralSearchBatch(
 }
 
 /**
+ * v1.2.10.7: 向右线性扫描（单节点）—— 螺线覆盖 ~400px 后若失败，
+ * 沿自然流动方向（右）逐步搜索空位，避免直接跳到画布最右端。
+ * 每步 X 方向递增 step，Y 方向尝试 0 / +step / -step 三个偏移。
+ * 扫描范围最大 RIGHTWARD_MAX_RANGE px。
+ */
+const RIGHTWARD_MAX_RANGE = 3000;
+
+function rightwardScanSingle(
+  desired: Rect, existing: Rect[], step: number, gap: number
+): { x: number; y: number } | null {
+  const maxSteps = Math.ceil(RIGHTWARD_MAX_RANGE / step);
+  for (let i = 1; i <= maxSteps; i++) {
+    const dx = i * step;
+    // 尝试三个 Y 偏移: 正中 / 偏下 / 偏上
+    for (const dy of [0, step, -step]) {
+      const cand: Rect = { x: desired.x + dx, y: desired.y + dy, w: desired.w, h: desired.h };
+      if (!anyIntersect(cand, existing, gap)) {
+        return { x: cand.x, y: cand.y };
+      }
+    }
+  }
+  return null;
+}
+
+function rightwardScanBatch(
+  desiredRects: Rect[], existing: Rect[], step: number, gap: number
+): { dx: number; dy: number } | null {
+  const maxSteps = Math.ceil(RIGHTWARD_MAX_RANGE / step);
+  for (let i = 1; i <= maxSteps; i++) {
+    const dx = i * step;
+    for (const dy of [0, step, -step]) {
+      let ok = true;
+      for (const r of desiredRects) {
+        const cand: Rect = { x: r.x + dx, y: r.y + dy, w: r.w, h: r.h };
+        if (anyIntersect(cand, existing, gap)) { ok = false; break; }
+      }
+      if (ok) return { dx, dy };
+    }
+  }
+  return null;
+}
+
+/**
  * 单节点避让 — 期望落点 desired, 现有节点矩形 existing,
- * 螺线找无重叠位置, 失败走最右兜底。
- *
- * v1.2.10.5-hotfix: 双 pass 搜索 —— 先小 step (紧凑空隙), 再自适应大 step (跨越大节点)。
+ * 螺线找无重叠位置, 失败走向右扫描, 再失败走最右兜底。
  *
  * @returns 最终落点 (x, y) — 节点左上角坐标。
  */
@@ -260,19 +301,21 @@ export function resolveSingleSpawn(
   const baseStep = opts.step ?? PLACEMENT_STEP;
   const maxTries = opts.maxTries ?? PLACEMENT_MAX_TRIES;
 
-  // 单 pass 搜索: 固定小步长 + 充足尝试次数，保持紧凑
+  // Pass 1: 螺线搜索 (~400px 范围内找紧凑空位)
   const hit = spiralSearchSingle(desired, existing, baseStep, maxTries, gap);
   if (hit) return hit;
 
-  // 兜底: 所有现有节点最右侧 + gap, y 取期望 y
+  // Pass 2: 向右线性扫描 (覆盖螺线到不了的中远距离空隙)
+  const rightHit = rightwardScanSingle(desired, existing, baseStep, gap);
+  if (rightHit) return rightHit;
+
+  // Pass 3 兜底: 所有现有节点最右侧 + gap, y 取期望 y
   return fallbackRightmost(desired, existing, gap, opts);
 }
 
 /**
  * 整组避让 — N 个 desiredRect 作为一个组, 找到一个公共偏移 (dx,dy)
  * 让整组都不与 existing 相交。保持组内相对布局不变 (适合 9 宫格 / 多链克隆)。
- *
- * v1.2.10.5-hotfix: 双 pass 搜索 —— 先小 step (紧凑空隙), 再自适应大 step (跨越大节点)。
  *
  * @returns 整组要平移的偏移 (dx, dy)。调用方对每个 desiredRect 加上该偏移即可。
  */
@@ -287,11 +330,15 @@ export function resolveBatchSpawn(
   const baseStep = opts.step ?? PLACEMENT_STEP;
   const maxTries = opts.maxTries ?? PLACEMENT_MAX_TRIES;
 
-  // 单 pass 搜索: 用固定小步长保持紧凑，给足尝试次数
+  // Pass 1: 螺线搜索 (~400px 范围内找紧凑空位)
   const hit = spiralSearchBatch(desiredRects, existing, baseStep, maxTries, gap);
   if (hit) return hit;
 
-  // 兜底: 把整组挪到最右边
+  // Pass 2: 向右线性扫描 (覆盖螺线到不了的中远距离空隙)
+  const rightHit = rightwardScanBatch(desiredRects, existing, baseStep, gap);
+  if (rightHit) return rightHit;
+
+  // Pass 3 兜底: 把整组挪到最右边
   const groupBox: Rect = boundingBox(desiredRects);
   const fallback = fallbackRightmost(groupBox, existing, gap, opts);
   return {
