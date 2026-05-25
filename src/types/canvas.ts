@@ -125,6 +125,8 @@ export interface ApiSettings {
   fileSavePath?: string;
   // v1.3.1: 画布自动保存导出路径(实际写入 <path>/T8-penguin-canvas/canvases)
   canvasAutoSavePath?: string;
+  // v1.3.4: 资源库路径(资源文件 + resource_library.json 元数据)
+  resourceLibraryPath?: string;
   preferences?: {
     theme?: 'dark' | 'light';
     language?: string;

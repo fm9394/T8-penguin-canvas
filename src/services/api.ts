@@ -170,9 +170,9 @@ export interface AddRHToolPayload {
   coverUrl?: string;
 }
 
-type OkData<T> = { success: true; data: T };
-type ErrData = { success: false; error: string };
-type Result<T> = OkData<T> | ErrData;
+export type OkData<T> = { success: true; data: T };
+export type ErrData = { success: false; error: string };
+export type Result<T> = OkData<T> | ErrData;
 
 async function safeRequest<T>(url: string, init?: RequestInit): Promise<Result<T>> {
   try {
@@ -255,6 +255,110 @@ export function importRHToolsBackup(payload: RHToolsBackup, mode: 'replace' | 'm
       body: JSON.stringify({ ...payload, mode }),
     }
   );
+}
+
+// ========== 资源库 (v1.3.4) ==========
+export type ResourceKind = 'image' | 'video' | 'audio';
+
+export interface ResourceCategory {
+  id: string;
+  kind: ResourceKind;
+  name: string;
+  order: number;
+  system?: boolean;
+  createdAt: number;
+}
+
+export interface ResourceItem {
+  id: string;
+  kind: ResourceKind;
+  categoryId: string;
+  title: string;
+  originalName?: string;
+  fileUrl: string;
+  thumbUrl?: string;
+  mime?: string;
+  size: number;
+  sha256?: string;
+  tags: string[];
+  favorite: boolean;
+  sourceUrl?: string;
+  sourceNodeId?: string;
+  sourceCanvasId?: string;
+  createdAt: number;
+  updatedAt: number;
+  lastUsedAt?: number;
+}
+
+export interface AddResourcePayload {
+  url: string;
+  kind: ResourceKind;
+  categoryId?: string;
+  title?: string;
+  tags?: string[];
+  sourceNodeId?: string;
+  sourceCanvasId?: string;
+  favorite?: boolean;
+}
+
+export function getResourceCategories(kind?: ResourceKind) {
+  const q = kind ? `?kind=${encodeURIComponent(kind)}` : '';
+  return safeRequest<ResourceCategory[]>(`${BASE}/resources/categories${q}`);
+}
+
+export function addResourceCategory(kind: ResourceKind, name: string) {
+  return safeRequest<ResourceCategory>(`${BASE}/resources/categories`, {
+    method: 'POST',
+    body: JSON.stringify({ kind, name }),
+  });
+}
+
+export function renameResourceCategory(id: string, name: string) {
+  return safeRequest<ResourceCategory>(`${BASE}/resources/categories/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteResourceCategory(id: string) {
+  return safeRequest<{ movedTo: string }>(`${BASE}/resources/categories/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function getResourceItems(params: {
+  kind?: ResourceKind;
+  categoryId?: string;
+  q?: string;
+  favorite?: boolean;
+} = {}) {
+  const sp = new URLSearchParams();
+  if (params.kind) sp.set('kind', params.kind);
+  if (params.categoryId) sp.set('categoryId', params.categoryId);
+  if (params.q) sp.set('q', params.q);
+  if (params.favorite) sp.set('favorite', '1');
+  const qs = sp.toString();
+  return safeRequest<ResourceItem[]>(`${BASE}/resources/items${qs ? `?${qs}` : ''}`);
+}
+
+export function addResourceItem(payload: AddResourcePayload) {
+  return safeRequest<ResourceItem & { duplicate?: boolean }>(`${BASE}/resources/items/add`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateResourceItem(id: string, patch: Partial<Pick<ResourceItem, 'title' | 'categoryId' | 'tags' | 'favorite'>> & { touch?: boolean }) {
+  return safeRequest<ResourceItem>(`${BASE}/resources/items/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(patch),
+  });
+}
+
+export function deleteResourceItem(id: string) {
+  return safeRequest<void>(`${BASE}/resources/items/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
 }
 
 // ========== 算力充值 ==========

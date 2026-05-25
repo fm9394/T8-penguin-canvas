@@ -58,6 +58,7 @@ const proxyRouter = require('./routes/proxy');
 const filesRouter = require('./routes/files');
 const imageOpsRouter = require('./routes/imageOps');
 const rechargeRouter = require('./routes/recharge');
+const resourcesRouter = require('./routes/resources');
 
 app.use('/api/canvas', canvasRouter);
 app.use('/api/settings', settingsRouter);
@@ -65,6 +66,7 @@ app.use('/api/proxy', proxyRouter);
 app.use('/api/files', filesRouter);
 app.use('/api/image', imageOpsRouter);
 app.use('/api/recharge', rechargeRouter.apiRouter);
+app.use('/api/resources', resourcesRouter);
 app.use('/pay', rechargeRouter.payRouter);
 
 // ========== 前端静态资源(仅打包模式) ==========

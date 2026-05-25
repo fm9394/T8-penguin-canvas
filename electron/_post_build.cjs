@@ -165,6 +165,7 @@ function main() {
   checkFile(path.join(RES, 'backend-enc', 'routes', 'files.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'imageOps.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'recharge.t8c'));
+  checkFile(path.join(RES, 'backend-enc', 'routes', 'resources.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'utils', 'duckPayload.t8c'));
 
   console.log('\n[2] 前端 dist:');

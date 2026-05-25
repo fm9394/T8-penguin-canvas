@@ -246,8 +246,15 @@ const edgeTypes = {
   deletable: DeletableEdge,
 };
 
+export interface AddNodeOptions {
+  atScreen?: { x: number; y: number };
+  data?: Record<string, any>;
+}
+
+export type AddNodeFn = (type: NodeType, options?: AddNodeOptions) => void;
+
 interface CanvasInnerProps {
-  onAddNodeRef?: React.MutableRefObject<((type: NodeType) => void) | null>;
+  onAddNodeRef?: React.MutableRefObject<AddNodeFn | null>;
 }
 
 function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
@@ -423,7 +430,8 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   //   期望落点冲突时按螺线 (右→下→左→上 step=80 maxTries=64) 自动避让,
   //   兜底走最右侧 + 写日志 + setCenter 飞镜。
   const addNode = useCallback(
-    (type: NodeType, atScreen?: { x: number; y: number }) => {
+    (type: NodeType, options?: AddNodeOptions) => {
+      const atScreen = options?.atScreen;
       const id = `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       let cx: number;
       let cy: number;
@@ -455,7 +463,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         id,
         type,
         position: { x: finalPos.x, y: finalPos.y },
-        data: { ...(INITIAL_DATA[type] || {}) },
+        data: { ...(INITIAL_DATA[type] || {}), ...(options?.data || {}) },
       };
       setNodes((prev) => [...prev, newNode]);
     },
@@ -2930,7 +2938,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
                     onClick={() => {
                       const at = { x: paneMenu.x, y: paneMenu.y };
                       closePaneMenu();
-                      addNode(meta.type as NodeType, at);
+                      addNode(meta.type as NodeType, { atScreen: at });
                     }}
                   >
                     <span
@@ -2959,7 +2967,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
 }
 
 interface CanvasProps {
-  onAddNodeRef?: React.MutableRefObject<((type: NodeType) => void) | null>;
+  onAddNodeRef?: React.MutableRefObject<AddNodeFn | null>;
 }
 
 export default function Canvas(props: CanvasProps) {

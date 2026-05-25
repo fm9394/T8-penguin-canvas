@@ -1,15 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
-import { Moon, Settings, Sun, Wifi, WifiOff, Sparkles, Cpu, Cloud, ExternalLink, Copy, Check, Gift, Heart, Youtube, PlayCircle, Bell, Wand2, Globe, MessageCircle, CalendarDays, Rocket, Key, Gem } from 'lucide-react';
+import { Moon, Settings, Sun, Wifi, WifiOff, Sparkles, Cpu, Cloud, ExternalLink, Copy, Check, Gift, Heart, Youtube, PlayCircle, Bell, Wand2, Globe, MessageCircle, CalendarDays, Rocket, Key, Gem, Library } from 'lucide-react';
 import { useThemeStore } from './stores/theme';
 import { useApiKeysStore } from './stores/apiKeys';
 import Sidebar from './components/Sidebar';
-import Canvas from './components/Canvas';
+import Canvas, { type AddNodeFn } from './components/Canvas';
 import ApiSettingsModal from './components/ApiSettings';
 import RechargeModal from './components/RechargeModal';
+import ResourceLibraryDrawer from './components/ResourceLibraryDrawer';
+import MaterialContextMenu from './components/MaterialContextMenu';
 import ErrorBoundary from './components/ErrorBoundary';
 import { RHToolsProvider } from './providers/RHToolsProvider';
 import * as api from './services/api';
 import type { NodeType } from './types/canvas';
+import type { ResourceItem } from './services/api';
 
 // vite.config 注入的编译期常量（与 package.json 同步），勿硬编码 v1.x.x
 declare const __APP_VERSION__: string;
@@ -24,6 +27,7 @@ function App() {
   const [backendStatus, setBackendStatus] = useState<'checking' | 'ok' | 'error'>('checking');
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [rechargeOpen, setRechargeOpen] = useState(false);
+  const [resourceOpen, setResourceOpen] = useState(false);
   // 「在线画布」推广浮层开关 + 容器 ref(用于点击外部关闭)
   const [cloudOpen, setCloudOpen] = useState(false);
   const [wxCopied, setWxCopied] = useState(false);
@@ -38,7 +42,7 @@ function App() {
   const [appOpen, setAppOpen] = useState(false);
   const appWrapRef = useRef<HTMLDivElement>(null);
   // 画布接收节点添加的 ref(从 Sidebar -> Canvas)
-  const addNodeRef = useRef<((type: NodeType) => void) | null>(null);
+  const addNodeRef = useRef<AddNodeFn | null>(null);
 
   // 「在线画布」浮层: 点击容器外部 / 按 ESC 自动关闭
   useEffect(() => {
@@ -193,6 +197,23 @@ function App() {
 
   const handleAddNode = (type: NodeType) => {
     addNodeRef.current?.(type);
+  };
+
+  const handleInsertResource = (item: ResourceItem) => {
+    const data: Record<string, any> = {
+      uploadType: item.kind,
+      fileName: item.title || item.originalName || '资源库素材',
+      fileSize: item.size || 0,
+      mime: item.mime || '',
+    };
+    if (item.kind === 'image') {
+      data.imageUrl = item.fileUrl;
+    } else if (item.kind === 'video') {
+      data.videoUrl = item.fileUrl;
+    } else if (item.kind === 'audio') {
+      data.audioUrl = item.fileUrl;
+    }
+    addNodeRef.current?.('upload', { data });
   };
 
   return (
@@ -849,6 +870,22 @@ function App() {
             <span className="text-[11px]">充值</span>
           </button>
           <button
+            onClick={() => setResourceOpen(true)}
+            className={
+              isPixel
+                ? 'px-btn px-btn--sm px-btn--mint'
+                : `flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors border ${
+                    isDark
+                      ? 'bg-fuchsia-500/10 border-fuchsia-500/30 text-fuchsia-300 hover:bg-fuchsia-500/20'
+                      : 'bg-fuchsia-50 border-fuchsia-300 text-fuchsia-700 hover:bg-fuchsia-100'
+                  }`
+            }
+            title="资源库"
+          >
+            <Library size={14} />
+            <span className="text-[11px]">资源库</span>
+          </button>
+          <button
             onClick={() => setSettingsOpen(true)}
             className={
               isPixel
@@ -884,6 +921,12 @@ function App() {
       {/* API 设置弹窗 */}
       <ApiSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <RechargeModal open={rechargeOpen} onClose={() => setRechargeOpen(false)} />
+      <ResourceLibraryDrawer
+        open={resourceOpen}
+        onClose={() => setResourceOpen(false)}
+        onInsertMaterial={handleInsertResource}
+      />
+      <MaterialContextMenu />
     </div>
     </RHToolsProvider>
   );

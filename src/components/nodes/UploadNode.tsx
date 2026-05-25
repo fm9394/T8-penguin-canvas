@@ -477,6 +477,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
                 data-drag-url={url}
                 data-drag-preview={url}
                 data-drag-node-id={id}
+                data-resource-title={fileName}
                 onMouseDown={(e) =>
                   beginMaterialDrag(e, { kind: 'image', url, sourceNodeId: id, previewUrl: url })
                 }
@@ -498,6 +499,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
                 data-drag-url={url}
                 data-drag-preview={url}
                 data-drag-node-id={id}
+                data-resource-title={fileName}
                 onMouseDown={(e) =>
                   beginMaterialDrag(e, { kind: 'video', url, sourceNodeId: id, previewUrl: url })
                 }
@@ -512,6 +514,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
                 data-drag-kind="audio"
                 data-drag-url={url}
                 data-drag-node-id={id}
+                data-resource-title={fileName}
                 onMouseDown={(e) =>
                   beginMaterialDrag(e, { kind: 'audio', url, sourceNodeId: id })
                 }

@@ -768,6 +768,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
                     data-drag-url={u}
                     data-drag-preview={u}
                     data-drag-node-id={id}
+                    data-resource-title={u.split('/').pop()}
                     onMouseDown={(e) =>
                       beginMaterialDrag(e, { kind: 'image', url: u, sourceNodeId: id, previewUrl: u })
                     }
@@ -816,6 +817,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
                   data-drag-url={u}
                   data-drag-preview={u}
                   data-drag-node-id={id}
+                  data-resource-title={u.split('/').pop()}
                   onMouseDown={(e) =>
                     beginMaterialDrag(e, { kind: 'video', url: u, sourceNodeId: id, previewUrl: u })
                   }
@@ -856,6 +858,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
                   data-drag-kind="audio"
                   data-drag-url={u}
                   data-drag-node-id={id}
+                  data-resource-title={u.split('/').pop()}
                   onMouseDown={(e) =>
                     beginMaterialDrag(e, { kind: 'audio', url: u, sourceNodeId: id })
                   }

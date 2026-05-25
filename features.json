@@ -1,7 +1,7 @@
 {
   "$schema": "本文件为 T8-penguin-canvas 节点清单防丢失锁,任何节点删减都需要在 roadmap.md 中说明并更新本文件。",
-  "version": "1.3.3",
-  "lastUpdated": "2026-05-26-v1.3.3-rh-duck-output-decode",
+  "version": "1.3.5",
+  "lastUpdated": "2026-05-26-v1.3.5-resource-library-pixel-actions",
   "packaging": {
     "description": "Electron NSIS 桌面端打包链路(v1.2.1 起标准化, 严禁未明确指令主动打包)。完整产物拓扑: app.asar(electron/{main,loader,preload}.cjs + node_modules) + app.asar.unpacked(node_modules/sharp + @img) + resources/backend-enc/*.t8c(extraResources, asar 外) + resources/frontend(extraResources, asar 外)。前端版本号由 vite define 注入 __APP_VERSION__、Sidebar 左下角自动同步。",
     "scripts": {
@@ -16,15 +16,15 @@
       "T8PC_FRONTEND_DIST": "打包模式 = path.join(process.resourcesPath, 'frontend'); 开发模式 = <project>/dist",
       "T8PC_RES": "打包模式 = process.resourcesPath; 开发模式 = <project>"
     },
-    "version": "1.3.3",
-    "semverVersion": "1.3.3",
-    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；阶段内 patch 从 1.3.0 → 1.3.9，下一阶段进位 1.4.0；当前 v1.3.3 为 RH 输出链路增加 SS_tools 无密码鸭鸭图透明解码，RunningHub / RH钱包应用 / RH超市三入口自动按真实载荷类型输出图片、视频或音频。",
-    "installer": "dist_electron/T8-PenguinCanvas-Setup-1.3.3.exe (NSIS, 约 87 MB)",
+    "version": "1.3.5",
+    "semverVersion": "1.3.5",
+    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；阶段内 patch 从 1.3.0 → 1.3.9，下一阶段进位 1.4.0；当前 v1.3.5 优化资源库像素风卡片操作区，插入按钮改为纯加号图标并与编辑/删除按钮等尺寸对齐。",
+    "installer": "dist_electron/T8-PenguinCanvas-Setup-1.3.5.exe (NSIS, 约 87 MB)",
     "checklist": [
       "运行 npm run encrypt 前确认已 npm install bytenode 且使用 Electron 内置 Node",
       "backend/src/ 任何文件修改后必须重新 npm run encrypt 再打包",
       "main.cjs 的窗口标题 / log 窗口 / IPC version 三处版本号，以及 backend/src/config.js APP_VERSION 必须与 package.json 同步",
-      "_post_build.cjs 验证 9 个 .t8c 必存在: server/config + routes/{canvas,settings,proxy,files,imageOps,recharge} + utils/duckPayload",
+      "_post_build.cjs 验证 10 个 .t8c 必存在: server/config + routes/{canvas,settings,proxy,files,imageOps,recharge,resources} + utils/duckPayload",
       "_post_build.cjs 验证 resources/frontend/index.html + assets/ 必存在",
       "_post_build.cjs 自动清除任何意外混入的 resources/{app,backend}/src 明文目录",
       "_post_build.cjs 必须拦截源码中的非空 RECHARGE_DEFAULT_ENC，以及 resources 中的 data/recharge.private.json、非空 AGENT_HMAC_KEY / DULUPAY_KEY、RECHARGE_DEFAULT_ENC 可逆密文；用户分发包不得携带充值 agent HMAC",
@@ -128,7 +128,9 @@
     "phase43": { "label": "VPS 公开充值接口 + 三段阶段版本规则 (v1.3.0)", "status": "complete", "items": ["充值系统切换到 VPS /public/recharge/* 公开下单、查单和重试接口，T8 桌面端只保存绑定用户、订单摘要与 order_token，不再携带或使用全局 agent HMAC", "版本规则废弃 4 段 display + 压缩 semver，改为统一三段 x.y.z；从 1.3.0 开始，阶段内 1.3.1 到 1.3.9，下个阶段为 1.4.0", "package.json、package-lock.json、vite.config.ts、vite.config.js、electron/main.cjs、features.json、README.md 已同步到 1.3.0；skill.md 仅本地更新且不得推送 GitHub"] },
     "phase44": { "label": "画布自动保存 + RH 超市导入导出 (v1.3.1)", "status": "complete", "items": ["设置页新增 canvasAutoSavePath，默认 D:\\zhenzhen；画布每次内部保存成功后同步导出 JSON 到 <path>/T8-penguin-canvas/canvases，便于更换版本后用现有导入功能恢复", "画布导出 JSON 升级为 schema=t8-penguin-canvas-export/version=2，包含 canvas 元信息与 viewport；导入兼容普通导出与自动保存备份", "RH 超市管理弹窗新增导出 / 导入按钮；导出分类和应用为 t8-rh-tools JSON，导入默认覆盖当前 RH 超市数据并保留备份内 id，方便旧画布继续匹配已选应用", "后端新增 POST /api/canvas/:id/auto-save、GET /api/settings/rh-tools/export、POST /api/settings/rh-tools/import；设置保存时自动 mkdir 本地保存路径"] },
     "phase45": { "label": "RH 超市节点本体导入导出入口 (v1.3.2)", "status": "complete", "items": ["RHToolsNode 启动器视图在「增加 / 编辑」下方新增「导出 / 导入」按钮，用户在节点本体即可备份或恢复 RH 超市分类和应用", "导入入口复用现有 t8-rh-tools JSON 清洗与 replace 覆盖逻辑，并在覆盖前提示确认，导入结果在节点内以同主题状态条显示", "RHToolEditorModal 顶部导出 / 导入入口继续保留，节点本体和管理弹窗两处入口共享同一套备份格式与后端导入逻辑", "backend/src/config.js 新增 APP_VERSION，/api/status 返回值同步当前发布版本，便于打包冒烟测试确认运行的是最新包"] },
-    "phase46": { "label": "RH 输出 SS_tools 鸭鸭图透明解码 (v1.3.3)", "status": "complete", "items": ["新增 backend/src/utils/duckPayload.js，纯 Node + sharp 复刻 SS_tools 无密码鸭鸭图解码算法，按 k=2/6/8 三种 LSB 位宽解析 payload length 与 header", "只支持无密码鸭鸭图；检测到 password-protected payload 或非鸭鸭图时不报错、不阻断，保持原 RH 输出 PNG 正常落盘", "RunningHub 查询结果回收阶段接入透明解码：/api/proxy/runninghub/query 下载 RH 远端输出后先 tryDecodeDuckPayload，成功后按真实 ext 保存为图片 / 视频 / 音频", "支持 .binpng 视频载荷恢复：将隐藏的二进制 PNG raw RGB 还原为原视频 bytes，并按 mp4/mov/webm 等真实扩展名输出", "前端 RunningHubNode、RH钱包应用、RHToolsNode 零 UI 改动；三者共享 queryRh 结果，解码后依靠现有后缀分流自动写入 imageUrl / videoUrl / audioUrl", "electron/_post_build.cjs 增加 backend-enc/utils/duckPayload.t8c 必存在校验，防止 Electron 用户包漏掉解码模块", ".gitignore 增加 /SS_tools/，本地参考拷贝及 exe/rar/assets 不进入公开仓库"] }
+    "phase46": { "label": "RH 输出 SS_tools 鸭鸭图透明解码 (v1.3.3)", "status": "complete", "items": ["新增 backend/src/utils/duckPayload.js，纯 Node + sharp 复刻 SS_tools 无密码鸭鸭图解码算法，按 k=2/6/8 三种 LSB 位宽解析 payload length 与 header", "只支持无密码鸭鸭图；检测到 password-protected payload 或非鸭鸭图时不报错、不阻断，保持原 RH 输出 PNG 正常落盘", "RunningHub 查询结果回收阶段接入透明解码：/api/proxy/runninghub/query 下载 RH 远端输出后先 tryDecodeDuckPayload，成功后按真实 ext 保存为图片 / 视频 / 音频", "支持 .binpng 视频载荷恢复：将隐藏的二进制 PNG raw RGB 还原为原视频 bytes，并按 mp4/mov/webm 等真实扩展名输出", "前端 RunningHubNode、RH钱包应用、RHToolsNode 零 UI 改动；三者共享 queryRh 结果，解码后依靠现有后缀分流自动写入 imageUrl / videoUrl / audioUrl", "electron/_post_build.cjs 增加 backend-enc/utils/duckPayload.t8c 必存在校验，防止 Electron 用户包漏掉解码模块", ".gitignore 增加 /SS_tools/，本地参考拷贝及 exe/rar/assets 不进入公开仓库"] },
+    "phase47": { "label": "创作资源库 (v1.3.4)", "status": "complete", "items": ["新增顶部「资源库」入口，打开右侧抽屉；图像 / 视频 / 音频三类独立 Tab、独立分类、搜索、收藏筛选与资源卡片管理", "任意上传或生成素材预览右键新增「加入资源库」菜单，可选择现有分类或新建分类；入库时复制一份到资源库目录，不依赖原 input/output 文件长期存在", "设置页新增 resourceLibraryPath，默认 D:\\zhenzhen\\resources；资源文件与 resource_library.json 元数据都保存在该路径，路径不存在时自动创建，方便更换版本后继续读取", "后端新增 backend/src/routes/resources.js，提供 /api/resources/categories、/api/resources/items、/api/resources/file/:id、/api/resources/thumb/:id；支持本地 input/output 复制、远端 URL 拉取、sha256 去重、删除资源库副本与图片缩略图生成", "远端 URL 入库增加安全护栏：本机/内网地址禁止拉取，30 秒超时，单个远端资源限制 512MB；本地 input/output 资源不受该限制", "资源库卡片支持图片缩略图、视频悬停播放预览、音频播放器、悬停放大、重命名、改分类、收藏、删除、插入画布；插入画布会创建带对应素材 URL 的 UploadNode", "资源库卡片保留 data-drag-source 协议，Ctrl+拖拽可继续投放到现有素材接收节点；双主题 UI 分别适配像素风与科技风", "electron/_post_build.cjs 增加 backend-enc/routes/resources.t8c 必存在校验，防止 Electron 用户包漏掉资源库后端"] },
+    "phase48": { "label": "资源库像素风操作按钮优化 (v1.3.5)", "status": "complete", "items": ["资源库卡片在像素风下取消「插入」文字胶囊，改为 32px 圆形加号图标按钮，避免音频卡片底部出现文字挤压和换行", "像素风插入 / 重命名 / 删除三个操作按钮统一为等尺寸圆形图标按钮，保留 title 与 aria-label，科技风仍保留「+ 插入」文字按钮", "公开版本同步到 1.3.5：package.json、package-lock.json、vite.config.ts/js、electron/main.cjs、backend/src/config.js APP_VERSION、features.json、README.md 全部同步"] }
   },
   "categories": {
     "input": {
