@@ -6303,4 +6303,70 @@ src/components/nodes/UploadNode.tsx             handleProduce 整组 + autoSpawn
 src/components/nodes/LoopNode.tsx               克隆链整组 + excludeIds=subNodeIds
 ```
 
+### v1.2.10.5.G hotfix · 重叠仍现 → 双 pass 螺线 + autoOutput 多源累积
+
+**用户反馈**（v1.2.10.5 初版交付后）：
+> 「他还是节点重叠在一起，在深度思考下」（截图：FramePair 自动生成的「输出素材 (2项)」OutputNode 与既有「输出素材 (1项)」OutputNode 仍精确重叠）
+
+**根因深度分析（两条独立失效链）**：
+
+**根因 1 · spiral step 远小于大节点尺寸**
+- 默认 `PLACEMENT_STEP = 80px`，但 OutputNode/ImageNode 实际尺寸 `320 × 360px`（4 倍 step）
+- spiral generator 前 20+ 步偏移全在 `[-160, 160] × [-160, 160]` 区间内 —— 完全落在节点矩形内部
+- `rectsIntersect` 含 `gap=32px` padding 后，整整 64 步螺线全部判定相交
+- 结果：算法收敛失败 → 走兜底 fallbackRightmost —— **但截图显示并未被推到最右**，说明 64 步内某个判定通过了 → 实际上是螺线终点恰好落到另一组节点边界外但**仍在某个特定节点 320×360 范围内**
+- 本质：固定 step=80 在大节点场景下数学上不可能跨出节点
+
+**根因 2 · autoOutput 多源新建节点之间互不可见**
+- Canvas.tsx autoOutput effect 一次循环可能为多个上游源节点（FramePair / Suno / 通用 N）补建 OutputNode
+- 三段代码各自调用 `placeBatchNodes(_desired, nodes, ...)` —— 但 `nodes` 是 effect 进入时的快照
+- 第一组新建节点已 push 进 `toAddNodes`，**但下一组避让时仍读旧 `nodes` 快照** → 新节点之间互相看不见 → 多源场景必重叠
+
+**修复 1 · nodePlacement.ts 双 pass spiral**
+- 新增 `computeAdaptiveStep(rects, gap, fallback)`：取所有矩形 `max(w+gap, h+gap)`，保证一步即可跨出最大节点
+- 新增 `spiralSearchSingle / spiralSearchBatch`：单 pass 搜索辅助函数（提取共用逻辑）
+- 重构 `resolveSingleSpawn / resolveBatchSpawn` 为双 pass：
+  ```ts
+  // Pass 1: 紧凑搜索 (小 step=80, 24 次)
+  const hit1 = spiralSearch(desired, existing, baseStep, 24, gap);
+  if (hit1) return hit1;
+  // Pass 2: 自适应大 step (剩余 maxTries=64-24=40 次)
+  const adaptStep = computeAdaptiveStep([...desired, ...existing], gap, baseStep);
+  if (adaptStep > baseStep) {
+    const hit2 = spiralSearch(desired, existing, adaptStep, maxTries, gap);
+    if (hit2) return hit2;
+  }
+  // Fallback: 最右兜底 + logBus.warn + 飞镜
+  ```
+- 设计要点：
+  - Pass 1 优先紧凑空隙（节点间隙、边角缝隙）—— 体验上落点贴近期望位置
+  - Pass 2 才用大 step 跨节点 —— 保证大节点场景必收敛
+  - 兜底路径不变 —— 极端密集场景仍走最右兜底 + 飞镜定位
+
+**修复 2 · Canvas.tsx autoOutput 多源累积器**
+- effect 顶部新增累加器：
+  ```ts
+  // hotfix: 一次 effect 内多个源节点补建的 OutputNode 之间互相可见
+  const pendingPlacedNodes: Node[] = [];
+  ```
+- 3 段 placeBatchNodes 调用统一改为：`[...nodes, ...pendingPlacedNodes]`
+  - L1992: FramePair 段 `placeBatchNodes(_desiredFP, [...nodes, ...pendingPlacedNodes], { source: 'placement:auto-frame-pair' })`
+  - L2044: Suno 双轨段 `placeBatchNodes(_desiredSU, [...nodes, ...pendingPlacedNodes], ...)`
+  - L2197: 通用 N 段 `placeBatchNodes(_desiredGen, [...nodes, ...pendingPlacedNodes], ...)`
+- 每次 `toAddNodes.push(_newNode)` 后同步 `pendingPlacedNodes.push(_newNode)` —— 让下一组避让能看见已补建的节点
+
+**hotfix 反重构检查表**
+- [ ] `nodePlacement.ts` `resolveSingleSpawn / resolveBatchSpawn` 是否双 pass（小 step → 自适应大 step）
+- [ ] `computeAdaptiveStep` 是否取 `max(w+gap, h+gap)` 而不是 `max(w, h)`
+- [ ] `Canvas.tsx` autoOutput effect 顶部是否声明 `pendingPlacedNodes: Node[] = []`
+- [ ] 3 段 `placeBatchNodes` 第二参是否合并 `[...nodes, ...pendingPlacedNodes]`
+- [ ] 3 段 `toAddNodes.push` 之后是否同步 `pendingPlacedNodes.push`
+- [ ] tsc EXIT=0
+
+**hotfix 经验教训**
+1. **算法 step 与场景尺寸必须解耦** —— 固定 step 永远撑不起所有节点尺寸，必须按实际矩形最大边动态算
+2. **双 pass 优于单 pass 调大** —— 直接用大 step 会牺牲紧凑场景的视觉贴近度；先紧凑后跨步保留两端体验
+3. **effect 内多源 mutation 的快照陷阱** —— React state 在同步 effect 内不会变，必须用本地累加器让兄弟 mutation 互相可见（与 phase24 RH `computeFreshValuesNow` 同款思路）
+4. **截图诊断要看坐标差** —— 用户截图的两个 OutputNode `(x1, y1)` 与 `(x2, y2)` 差值应是 `step × N + offset`，差值远小于节点尺寸时立即想到 step 不够大
+
 ---
