@@ -188,8 +188,10 @@ const NodeActionBar = () => {
     >
       <div
         // 真正的浮动条
+        data-node-action-bar
         className="nodrag nopan"
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         onMouseDown={(e) => e.stopPropagation()}
         style={{
           position: 'absolute',

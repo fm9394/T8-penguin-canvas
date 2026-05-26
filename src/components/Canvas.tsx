@@ -2682,6 +2682,33 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     return dispose;
   }, []);
 
+  // ReactFlow 会在 pointerdown capture 阶段启动节点选中/拖拽。
+  // 节点内按钮（尤其运行按钮）必须先挡住 down 事件，否则未选中节点的首次点击可能只激活节点。
+  useEffect(() => {
+    const isNodeButtonDown = (event: PointerEvent | MouseEvent) => {
+      if (event.button !== 0) return false;
+      if ('isPrimary' in event && event.isPrimary === false) return false;
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (!target) return false;
+      const button = target.closest('button, [role="button"]') as HTMLElement | null;
+      if (!button) return false;
+      return !!button.closest('.react-flow__node, [data-node-action-bar]');
+    };
+
+    const stopNodeButtonDown = (event: PointerEvent | MouseEvent) => {
+      if (!isNodeButtonDown(event)) return;
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    };
+
+    document.addEventListener('pointerdown', stopNodeButtonDown, true);
+    document.addEventListener('mousedown', stopNodeButtonDown, true);
+    return () => {
+      document.removeEventListener('pointerdown', stopNodeButtonDown, true);
+      document.removeEventListener('mousedown', stopNodeButtonDown, true);
+    };
+  }, []);
+
   const isDark = theme === 'dark';
   const isPixel = style === 'pixel';
   const guideColor = themeTokens.edgeSelected;
