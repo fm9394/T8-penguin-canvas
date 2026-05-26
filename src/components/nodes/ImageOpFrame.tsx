@@ -28,13 +28,15 @@ interface ImageOpNodeProps {
   runOp: (imageUrl: string) => Promise<{ imageUrl?: string; urls?: string[] }>;
   /** 可选：由节点自行订阅并传入的上游图像列表，避免预览和运行读取不同来源 */
   inputImages?: string[];
+  /** 是否把所有上游图像逐张处理并合并输出，适合宫格剪裁批量拆分合集 */
+  processAllInputs?: boolean;
   /** 是否需要多张输入(combine) */
   needsMulti?: boolean;
   width?: number;
 }
 
 export function ImageOpFrame(props: ImageOpNodeProps) {
-  const { id, data, selected, title, subtitle, icon, colorHex, bgRgba, shadowRgba, textHex, buttonClasses, renderSettings, runOp, inputImages, needsMulti, width } = props;
+  const { id, data, selected, title, subtitle, icon, colorHex, bgRgba, shadowRgba, textHex, buttonClasses, renderSettings, runOp, inputImages, processAllInputs, needsMulti, width } = props;
   const update = useUpdateNodeData(id);
   const { getEdges, getNodes } = useReactFlow();
   const [error, setError] = useState<string | null>(null);
@@ -75,12 +77,26 @@ export function ImageOpFrame(props: ImageOpNodeProps) {
     }
     update({ status: 'running', error: null });
     try {
-      // 通用约定:子节点处理第一张图
-      // combine 节点会自己在 runOp 内 ignore 参数,直接用全部上游
-      const r = await runOp(needsMulti ? (imgs as any) : imgs[0]);
+      // 通用约定:子节点处理第一张图；需要批量拆分时逐张处理全部上游图像。
+      // combine 节点会自己在 runOp 内 ignore 参数,直接用全部上游。
+      const r = processAllInputs && !needsMulti
+        ? await (async () => {
+            const urls: string[] = [];
+            for (const img of imgs) {
+              const one = await runOp(img);
+              if (one.imageUrl) urls.push(one.imageUrl);
+              if (Array.isArray(one.urls)) urls.push(...one.urls);
+            }
+            return { imageUrl: urls[0], urls };
+          })()
+        : await runOp(needsMulti ? (imgs as any) : imgs[0]);
       const patch: any = { status: 'success' };
       if (r.imageUrl) patch.imageUrl = r.imageUrl;
-      if (r.urls) patch.urls = r.urls;
+      if (r.urls) {
+        patch.urls = r.urls;
+        patch.imageUrls = r.urls;
+        if (!patch.imageUrl && r.urls[0]) patch.imageUrl = r.urls[0];
+      }
       update(patch);
     } catch (e: any) {
       setError(e?.message || '处理失败');

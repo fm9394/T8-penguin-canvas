@@ -161,7 +161,7 @@ const INITIAL_DATA: Record<string, Record<string, any>> = {
     pollInt: 10,
     frameMode: 'auto',
   },
-  cinematic: { kind: 'cinematic' },
+  cinematic: { kind: 'cinematic', cinematicLanguage: 'en', cinematicStrength: 'balanced' },
   'video-motion': { kind: 'video-motion' },
   'multi-angle-3d': { preset: 'multi-angle-3d' },
   'panorama-720': { preset: 'panorama-720' },
@@ -219,6 +219,8 @@ const EXECUTABLE_NODE_TYPES = new Set<string>([
   'upload',
   // v1.2.8 工具节点 (循环器 / 从合集获取)
   'loop', 'pick-from-set',
+  // v1.4.6: 工具箱文本节点也可点击 RUN 直接外挂 OutputNode
+  'cinematic', 'video-motion',
 ]);
 
 // 网格吸附步长 / 对齐阈值(世界坐标)
@@ -2177,6 +2179,8 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
 
     const toAddNodes: Node[] = [];
     const toAddEdges: Edge[] = [];
+    const toRemoveNodeIds = new Set<string>();
+    const toRemoveEdgeIds = new Set<string>();
     const newSigPatches: Array<[string, string]> = [];
     // v1.2.10.5-hotfix: 同一次 effect 内多个源节点补建的 OutputNode 之间互不可见 (nodes 快照不包含本轮刚 push 的节点),
     // 会导致多源场景下新 OutputNode 之间重叠。累积到 pendingPlacedNodes, 每次避让合并进 existing。
@@ -2370,7 +2374,14 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       // 意图：N 个产物 → N 个独立 OutputNode。只要某个 OutputNode 仅从本节点连入且未带 pickKind，
       // 就给它“升级”为 pickKind+pickIndex（按 items 排序中未被占用的下一个），让它只显示一项；
       // 不够再补建 autoOutput 节点。
-      const downstreamOutputs: Array<{ id: string; pickKind?: string; pickIndex?: number; incomingFromMe: number }> = [];
+      const downstreamOutputs: Array<{
+        id: string;
+        pickKind?: string;
+        pickIndex?: number;
+        incomingFromMe: number;
+        auto: boolean;
+        removable: boolean;
+      }> = [];
       for (const e of edges) {
         if (e.source !== n.id) continue;
         const t = nodes.find((x) => x.id === e.target);
@@ -2379,26 +2390,50 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         // 限仅封闭: 如果该 OutputNode 还连了别的上游, 不能随便修改它的 pickKind
         const incomingFromMe = edges.filter((x) => x.target === t.id && x.source === n.id).length;
         const totalIncoming = edges.filter((x) => x.target === t.id).length;
+        const hasOutgoing = edges.some((x) => x.source === t.id);
+        const auto = t.id.startsWith('output-auto-') && e.id.startsWith('e-auto-');
+        const removable = auto && totalIncoming === 1 && !hasOutgoing && td.userMoved !== true;
         if (totalIncoming > 1) {
           // 多上游合并节点 → 不动 data, 但计数占位
-          downstreamOutputs.push({ id: t.id, pickKind: td.pickKind, pickIndex: td.pickIndex, incomingFromMe });
+          downstreamOutputs.push({ id: t.id, pickKind: td.pickKind, pickIndex: td.pickIndex, incomingFromMe, auto, removable: false });
           continue;
         }
-        downstreamOutputs.push({ id: t.id, pickKind: td.pickKind, pickIndex: td.pickIndex, incomingFromMe });
+        downstreamOutputs.push({ id: t.id, pickKind: td.pickKind, pickIndex: td.pickIndex, incomingFromMe, auto, removable });
+      }
+
+      const itemKey = (it: { kind: string; kindIndex: number }) => `${it.kind}:${it.kindIndex}`;
+      const validItemKeys = new Set(items.map(itemKey));
+      const activeDownstreamOutputs = downstreamOutputs.filter((o) => {
+        if (
+          o.removable &&
+          o.pickKind &&
+          typeof o.pickIndex === 'number' &&
+          !validItemKeys.has(`${o.pickKind}:${o.pickIndex}`)
+        ) {
+          toRemoveNodeIds.add(o.id);
+          for (const edge of edges) {
+            if (edge.source === o.id || edge.target === o.id) toRemoveEdgeIds.add(edge.id);
+          }
+          return false;
+        }
+        return true;
+      });
+
+      if (activeDownstreamOutputs.length !== downstreamOutputs.length) {
+        console.warn('[autoOutput] 清理过期自动输出节点', downstreamOutputs.length - activeDownstreamOutputs.length);
       }
 
       // 差异化处理:
       //   1) 已带 pickKind+pickIndex 的 → 计作“已占用该项”
       //   2) 未带 pickKind 的 → 依次升级为 items 中还未被占用的项
       const occupied = new Set<string>(); // key=`${kind}:${kindIndex}`
-      for (const o of downstreamOutputs) {
+      for (const o of activeDownstreamOutputs) {
         if (o.pickKind && typeof o.pickIndex === 'number') {
           occupied.add(`${o.pickKind}:${o.pickIndex}`);
         }
       }
-      const itemKey = (it: { kind: string; kindIndex: number }) => `${it.kind}:${it.kindIndex}`;
       const upgradePatches: Array<[string, { pickKind: string; pickIndex: number }]> = [];
-      for (const o of downstreamOutputs) {
+      for (const o of activeDownstreamOutputs) {
         if (o.pickKind) continue;
         // 指定下一个未占用项
         const next = items.find((it) => !occupied.has(itemKey(it)));
@@ -2482,11 +2517,21 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
 
     // 先写 ref 避免下次 useEffect 重进入重复创建
     for (const [id, sig] of newSigPatches) autoOutputProcessedRef.current.set(id, sig);
-    if (toAddNodes.length > 0) {
-      console.warn('[autoOutput] 创建', toAddNodes.length, '个节点, pending累积:', pendingPlacedNodes.length,
+    if (toRemoveNodeIds.size > 0 || toAddNodes.length > 0) {
+      if (toAddNodes.length > 0) {
+        console.warn('[autoOutput] 创建', toAddNodes.length, '个节点, pending累积:', pendingPlacedNodes.length,
         '\n  positions:', toAddNodes.map(n => `${n.id.slice(0,20)}.. (${Math.round(n.position.x)},${Math.round(n.position.y)})`));
-      setNodes((prev) => [...prev, ...toAddNodes]);
-      setEdges((prev) => [...prev, ...toAddEdges]);
+      }
+      setNodes((prev) => [
+        ...prev.filter((node) => !toRemoveNodeIds.has(node.id)),
+        ...toAddNodes,
+      ]);
+    }
+    if (toRemoveEdgeIds.size > 0 || toAddEdges.length > 0) {
+      setEdges((prev) => [
+        ...prev.filter((edge) => !toRemoveEdgeIds.has(edge.id)),
+        ...toAddEdges,
+      ]);
     }
   }, [nodes, edges, loaded]);
 

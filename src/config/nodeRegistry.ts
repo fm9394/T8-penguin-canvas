@@ -62,8 +62,8 @@ export const NODE_REGISTRY: NodeMeta[] = [
   { type: 'video-output', label: '视频输出', category: 'auxiliary', description: '视频结果展示', icon: 'MonitorPlay', color: 'slate', hidden: true },
 
   // ========== Toolbox 工具箱(2) ==========
-  { type: 'cinematic', label: '电影感', category: 'toolbox', description: '影视化效果', icon: 'Clapperboard', color: 'pink' },
-  { type: 'video-motion', label: '视频运镜', category: 'toolbox', description: '运镜参数', icon: 'Camera', color: 'pink' },
+  { type: 'cinematic', label: '电影感', category: 'toolbox', description: '15 类电影风格组合输出 prompt，可运行生成输出节点', icon: 'Clapperboard', color: 'pink' },
+  { type: 'video-motion', label: '视频运镜', category: 'toolbox', description: '运镜参数，可运行生成输出节点', icon: 'Camera', color: 'pink' },
 ];
 
 // 按分类分组,便于 Sidebar 渲染 (在这里过滤 hidden 节点 —— 它们仍在 NODE_REGISTRY 中保证节点类型注册)

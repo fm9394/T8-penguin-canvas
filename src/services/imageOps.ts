@@ -52,10 +52,23 @@ export const opGridCrop = (
   cols: number,
   gap?: number,
   rectsPx?: Array<{ x: number; y: number; w: number; h: number; row?: number; col?: number }>,
+  options?: {
+    orderMode?: 'row' | 'column' | 'snake' | 'reverse';
+    exportIndexes?: number[] | string;
+  },
 ) =>
-  postOp<{ urls: string[]; rows: number; cols: number; gap: number; layout: { rows: number; cols: number; gap: number } }>(
+  postOp<{
+    urls: string[];
+    rows: number;
+    cols: number;
+    gap: number;
+    orderMode?: string;
+    exportIndexes?: number[];
+    totalTiles?: number;
+    layout: { rows: number; cols: number; gap: number; orderMode?: string };
+  }>(
     'grid-crop',
-    { imageUrl, rows, cols, gap, rectsPx },
+    { imageUrl, rows, cols, gap, rectsPx, ...(options || {}) },
   );
 
 export const opCombine = (imageUrls: string[], direction: 'horizontal' | 'vertical') =>

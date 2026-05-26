@@ -80,6 +80,63 @@ function clampNumber(v, min, max, fallback) {
   return Math.max(min, Math.min(max, n));
 }
 
+function normalizeGridOrderMode(v) {
+  const s = String(v || 'row');
+  if (['row', 'column', 'snake', 'reverse'].includes(s)) return s;
+  return 'row';
+}
+
+function orderGridRects(rects, mode) {
+  const withIndex = rects.map((rect, i) => ({ ...rect, _inputIndex: i }));
+  const byRow = (a, b) => (a.row - b.row) || (a.col - b.col) || (a._inputIndex - b._inputIndex);
+  if (mode === 'column') {
+    return withIndex.sort((a, b) => (a.col - b.col) || (a.row - b.row) || (a._inputIndex - b._inputIndex));
+  }
+  if (mode === 'snake') {
+    return withIndex.sort((a, b) => {
+      if (a.row !== b.row) return a.row - b.row;
+      const aCol = a.row % 2 === 0 ? a.col : -a.col;
+      const bCol = b.row % 2 === 0 ? b.col : -b.col;
+      return (aCol - bCol) || (a._inputIndex - b._inputIndex);
+    });
+  }
+  if (mode === 'reverse') {
+    return withIndex.sort((a, b) => byRow(b, a));
+  }
+  return withIndex.sort(byRow);
+}
+
+function parseGridIndexes(v, total) {
+  if (Array.isArray(v)) {
+    const set = new Set();
+    for (const item of v) {
+      const n = Math.trunc(Number(item));
+      if (Number.isFinite(n) && n >= 1 && n <= total) set.add(n);
+    }
+    return { provided: v.length > 0, indexes: Array.from(set).sort((a, b) => a - b) };
+  }
+  const raw = typeof v === 'string' ? v.trim() : '';
+  if (!raw) return { provided: false, indexes: [] };
+  const set = new Set();
+  for (const part of raw.split(/[,\s，、]+/)) {
+    const p = part.trim();
+    if (!p) continue;
+    const range = p.match(/^(\d+)\s*[-~至]\s*(\d+)$/);
+    if (range) {
+      const a = Math.trunc(Number(range[1]));
+      const b = Math.trunc(Number(range[2]));
+      if (!Number.isFinite(a) || !Number.isFinite(b)) continue;
+      const start = Math.max(1, Math.min(a, b));
+      const end = Math.min(total, Math.max(a, b));
+      for (let i = start; i <= end; i++) set.add(i);
+      continue;
+    }
+    const n = Math.trunc(Number(p));
+    if (Number.isFinite(n) && n >= 1 && n <= total) set.add(n);
+  }
+  return { provided: true, indexes: Array.from(set).sort((a, b) => a - b) };
+}
+
 function normalizeCompareMode(v) {
   const s = String(v || 'slider');
   if (s === 'checker') return 'focus';
@@ -260,11 +317,11 @@ router.post('/crop', async (req, res) => {
 
 // ========== POST /api/image/grid-crop — 九宫格切图 ==========
 // body:
-//   等分模式: { imageUrl, rows?, cols?, gap? }
-//   自定义橩矩形模式: { imageUrl, rectsPx: [{x,y,w,h,row?,col?}] } 优先
+//   等分模式: { imageUrl, rows?, cols?, gap?, orderMode?, exportIndexes? }
+//   自定义矩形模式: { imageUrl, rectsPx: [{x,y,w,h,row?,col?}], orderMode?, exportIndexes? } 优先
 router.post('/grid-crop', async (req, res) => {
   try {
-    const { imageUrl, rows, cols, gap, rectsPx } = req.body || {};
+    const { imageUrl, rows, cols, gap, rectsPx, orderMode, exportIndexes } = req.body || {};
     if (!imageUrl) return res.status(400).json({ success: false, error: 'imageUrl 必填' });
     const buf = await fetchImageBuffer(imageUrl);
     const meta = await sharp(buf).metadata();
@@ -322,10 +379,24 @@ router.post('/grid-crop', async (req, res) => {
       return res.status(400).json({ success: false, error: '无有效切割矩形' });
     }
 
+    const normalizedOrderMode = normalizeGridOrderMode(orderMode);
+    const orderedRects = orderGridRects(outRects, normalizedOrderMode);
+    const parsedIndexes = parseGridIndexes(exportIndexes, orderedRects.length);
+    if (parsedIndexes.provided && parsedIndexes.indexes.length === 0) {
+      return res.status(400).json({ success: false, error: `导出序号无效，可选范围 1-${orderedRects.length}` });
+    }
+    const selectedSet = parsedIndexes.indexes.length > 0 ? new Set(parsedIndexes.indexes) : null;
+    const selectedRects = selectedSet
+      ? orderedRects.filter((_, index) => selectedSet.has(index + 1))
+      : orderedRects;
+    if (selectedRects.length === 0) {
+      return res.status(400).json({ success: false, error: '没有可导出的宫格' });
+    }
+
     const enc = chooseEncoder(meta);
     // 并发切割 + 并发保存, 显著提速 (N=9 时以往 ~9x 串行)
     const tiles = await Promise.all(
-      outRects.map((rect) =>
+      selectedRects.map((rect) =>
         enc
           .encode(
             sharp(buf).extract({ left: rect.x, top: rect.y, width: rect.w, height: rect.h }),
@@ -341,7 +412,10 @@ router.post('/grid-crop', async (req, res) => {
         rows: layoutRows,
         cols: layoutCols,
         gap: layoutGap,
-        layout: { rows: layoutRows, cols: layoutCols, gap: layoutGap },
+        orderMode: normalizedOrderMode,
+        exportIndexes: selectedRects.map((_, index) => parsedIndexes.indexes[index]).filter(Boolean),
+        totalTiles: orderedRects.length,
+        layout: { rows: layoutRows, cols: layoutCols, gap: layoutGap, orderMode: normalizedOrderMode },
       },
     });
   } catch (e) {

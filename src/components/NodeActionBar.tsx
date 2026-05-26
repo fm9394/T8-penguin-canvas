@@ -30,6 +30,8 @@ const EXECUTABLE_NODE_TYPES = new Set<string>([
   'upload',
   // v1.2.8 循环器 / 从合集获取
   'loop', 'pick-from-set',
+  // v1.4.6: 工具箱文本节点也可点击 RUN 直接外挂 OutputNode
+  'cinematic', 'video-motion',
 ]);
 
 const BAR_GAP_PX = 8; // 与节点顶部的世界坐标系间距
