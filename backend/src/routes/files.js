@@ -7,6 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const config = require('../config');
+const { tryDecodeDuckPayload } = require('../utils/duckPayload');
 
 const router = express.Router();
 
@@ -89,6 +90,98 @@ router.post('/upload-base64', express.json({ limit: '20mb' }), (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+function resolveLocalFileUrl(url) {
+  if (typeof url !== 'string' || !url.trim()) return null;
+  const clean = url.split('?')[0].split('#')[0];
+  const mounts = [
+    { prefix: '/files/input/', dir: config.INPUT_DIR },
+    { prefix: '/files/output/', dir: config.OUTPUT_DIR },
+  ];
+  const mount = mounts.find((item) => clean.startsWith(item.prefix));
+  if (!mount) return null;
+  const rel = decodeURIComponent(clean.slice(mount.prefix.length));
+  const base = path.resolve(mount.dir);
+  const resolved = path.resolve(base, rel);
+  if (resolved !== base && !resolved.startsWith(base + path.sep)) return null;
+  return resolved;
+}
+
+function safeDuckExt(ext) {
+  const clean = String(ext || 'bin')
+    .trim()
+    .toLowerCase()
+    .replace(/^\./, '')
+    .replace(/[^a-z0-9._+-]/g, '')
+    .slice(0, 40);
+  return clean || 'bin';
+}
+
+// POST /api/files/duck-decode — 尝试按 SS_tools 无密码鸭鸭图批量解码本地素材
+// 非鸭鸭图 / 密码鸭鸭图 / 非图片输出都只返回 decoded:false，前端会静默回退到普通上传输出。
+router.post('/duck-decode', express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    const urls = Array.isArray(req.body?.urls) ? req.body.urls.filter((u) => typeof u === 'string') : [];
+    if (urls.length === 0) {
+      return res.status(400).json({ success: false, error: '缺少 urls' });
+    }
+    const limited = urls.slice(0, 30);
+    const items = [];
+    for (let i = 0; i < limited.length; i += 1) {
+      const sourceUrl = limited[i];
+      try {
+        const fp = resolveLocalFileUrl(sourceUrl);
+        if (!fp || !fs.existsSync(fp)) {
+          items.push({ sourceUrl, decoded: false, reason: 'local_file_not_found' });
+          continue;
+        }
+        const decoded = await tryDecodeDuckPayload(fs.readFileSync(fp));
+        if (!decoded?.decoded || !decoded.buffer) {
+          items.push({
+            sourceUrl,
+            decoded: false,
+            isDuck: !!decoded?.isDuck,
+            passwordProtected: !!decoded?.passwordProtected,
+            reason: decoded?.passwordProtected ? 'password_protected' : 'not_duck',
+          });
+          continue;
+        }
+        if (!['image', 'video', 'audio'].includes(decoded.kind)) {
+          items.push({ sourceUrl, decoded: false, isDuck: true, reason: 'unsupported_kind' });
+          continue;
+        }
+        if (!fs.existsSync(config.OUTPUT_DIR)) fs.mkdirSync(config.OUTPUT_DIR, { recursive: true });
+        const ext = safeDuckExt(decoded.ext);
+        const filename = `duck_${Date.now()}_${i}_${Math.random().toString(36).slice(2, 7)}.${ext}`;
+        const target = path.join(config.OUTPUT_DIR, filename);
+        fs.writeFileSync(target, decoded.buffer);
+        items.push({
+          sourceUrl,
+          decoded: true,
+          filename,
+          url: `/files/output/${filename}`,
+          size: decoded.buffer.length,
+          kind: decoded.kind,
+          mime: decoded.mime,
+          originalExt: decoded.originalExt,
+          ext,
+          lsbBits: decoded.lsbBits,
+        });
+      } catch (e) {
+        items.push({ sourceUrl, decoded: false, reason: e?.message || 'decode_failed' });
+      }
+    }
+    res.json({
+      success: true,
+      data: {
+        items,
+        decodedCount: items.filter((item) => item.decoded).length,
+      },
+    });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e?.message || String(e) });
   }
 });
 

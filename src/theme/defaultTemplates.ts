@@ -9,6 +9,7 @@ export const DEFAULT_THEME_TEMPLATE_ID = 'pixel-candy';
 export const TECH_TEMPLATE_ID = 'tech-default';
 export const PIXEL_TEMPLATE_ID = 'pixel-candy';
 export const OP_TEMPLATE_ID = 'op-style';
+export const RH_TEMPLATE_ID = 'rh-style';
 
 const techDark: ThemeTokens = {
   appBg: '#09090b',
@@ -224,6 +225,80 @@ const opDark: ThemeTokens = {
   portAudio: '#9f8cff',
 };
 
+const rhDark: ThemeTokens = {
+  appBg: '#050805',
+  canvasBg: '#070b07',
+  panelBg: '#0d140d',
+  panelBgElevated: '#121b12',
+  panelBgMuted: '#182318',
+  nodeBg: '#101810',
+  nodeHeaderBg: '#142614',
+  textMain: '#f3ffe8',
+  textMuted: '#c8dec0',
+  textDim: '#7d9278',
+  border: 'rgba(166,255,61,0.12)',
+  borderStrong: 'rgba(166,255,61,0.48)',
+  accent: '#a6ff3d',
+  accentHover: '#7dff2a',
+  accentText: '#041006',
+  secondary: '#26d9a4',
+  warning: '#e7ff7a',
+  danger: '#ff5c7a',
+  success: '#67ff8e',
+  shadowPanel: '0 18px 48px rgba(0,0,0,0.46), 0 0 0 1px rgba(166,255,61,0.08)',
+  shadowButton: '0 0 22px rgba(166,255,61,0.25)',
+  shadowStrong: '0 24px 70px rgba(0,0,0,0.62), 0 0 44px rgba(166,255,61,0.15)',
+  radiusPanel: '18px',
+  radiusButton: '9999px',
+  radiusNode: '16px',
+  gridDot: '#1e3420',
+  edge: '#395f40',
+  edgeSelected: '#a6ff3d',
+  selectionBg: 'rgba(166,255,61,0.14)',
+  selectionBorder: '#a6ff3d',
+  portText: '#81e6ff',
+  portImage: '#f7d35f',
+  portVideo: '#ff7a97',
+  portAudio: '#c9a7ff',
+  fontFamily: "Inter, system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+  displayFont: "Inter, system-ui, -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif",
+};
+
+const rhLight: ThemeTokens = {
+  ...rhDark,
+  appBg: '#f3f8ef',
+  canvasBg: '#eef6e8',
+  panelBg: '#ffffff',
+  panelBgElevated: '#f8fcf4',
+  panelBgMuted: '#e7f2df',
+  nodeBg: '#ffffff',
+  nodeHeaderBg: '#e7fadb',
+  textMain: '#102014',
+  textMuted: '#40523f',
+  textDim: '#6c7f68',
+  border: 'rgba(16,32,20,0.10)',
+  borderStrong: 'rgba(22,201,95,0.42)',
+  accent: '#16c95f',
+  accentHover: '#0ea34b',
+  accentText: '#041006',
+  secondary: '#0aa783',
+  warning: '#b0cc2d',
+  danger: '#e34267',
+  success: '#16c95f',
+  shadowPanel: '0 18px 45px rgba(23,52,28,0.12), 0 0 0 1px rgba(22,201,95,0.08)',
+  shadowButton: '0 10px 22px rgba(22,201,95,0.18)',
+  shadowStrong: '0 24px 70px rgba(23,52,28,0.18), 0 0 36px rgba(22,201,95,0.10)',
+  gridDot: '#bcd4b6',
+  edge: '#6d886f',
+  edgeSelected: '#16c95f',
+  selectionBg: 'rgba(22,201,95,0.14)',
+  selectionBorder: '#16c95f',
+  portText: '#0284c7',
+  portImage: '#c98200',
+  portVideo: '#db4464',
+  portAudio: '#7c5cf0',
+};
+
 export const BUILT_IN_THEME_TEMPLATES: ThemeTemplate[] = [
   {
     schema: 't8-theme-template',
@@ -308,6 +383,33 @@ export const BUILT_IN_THEME_TEMPLATES: ThemeTemplate[] = [
       copyrightNote: 'OP 风格默认音乐文件，可在主题模板中上传替换。',
     },
     modes: { dark: { tokens: opDark }, light: { tokens: opLight } },
+  },
+  {
+    schema: 't8-theme-template',
+    version: THEME_TEMPLATE_VERSION,
+    id: RH_TEMPLATE_ID,
+    name: 'RH风格',
+    description: 'RunningHub 工作台视觉：黑绿高对比、无边框卡片、荧光运行状态和云工作流平台感。',
+    author: 'T8',
+    builtIn: true,
+    legacyStyle: 'tech',
+    visuals: {
+      style: 'rh',
+      intensity: 'medium',
+      iconPack: 'default',
+      canvasPattern: 'hub',
+      nodeFrame: 'hub-card',
+      headerMark: 'RH',
+    },
+    music: {
+      title: 'RunningHub Pulse Loop',
+      preset: 'rh-pulse',
+      source: 'synth',
+      volume: 0.14,
+      bpm: 104,
+      copyrightNote: '原创 RH 工作台氛围合成循环；可在主题模板中上传替换。',
+    },
+    modes: { dark: { tokens: rhDark }, light: { tokens: rhLight } },
   },
 ];
 

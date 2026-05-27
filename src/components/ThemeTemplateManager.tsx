@@ -74,6 +74,7 @@ const VISUAL_STYLE_OPTIONS = [
   { value: 'tech', label: '科技视觉' },
   { value: 'pixel', label: '像素糖果' },
   { value: 'op', label: 'OP 航海' },
+  { value: 'rh', label: 'RH 工作台' },
 ] as const;
 
 const VISUAL_INTENSITY_OPTIONS = [
@@ -86,6 +87,7 @@ const MUSIC_PRESET_OPTIONS: Array<{ value: ThemeMusicPreset; label: string }> = 
   { value: 'tech-pulse', label: '科技脉冲' },
   { value: 'pixel-pop', label: '像素弹跳' },
   { value: 'grand-line-adventure', label: '航海冒险' },
+  { value: 'rh-pulse', label: 'RH 脉冲' },
 ];
 
 const MAX_THEME_AUDIO_SIZE = 20 * 1024 * 1024;
@@ -101,6 +103,49 @@ function fallbackVisuals(legacyStyle: LegacyThemeStyle): ThemeVisuals {
   };
 }
 
+function visualDefaultsFor(style: ThemeVisuals['style'], legacyStyle: LegacyThemeStyle, prev?: ThemeVisuals): ThemeVisuals {
+  if (style === 'op') {
+    return {
+      ...fallbackVisuals(legacyStyle),
+      ...(prev || {}),
+      style,
+      iconPack: 'op',
+      canvasPattern: 'map',
+      nodeFrame: 'wanted',
+      headerMark: prev?.headerMark || 'ONE PIECE',
+    };
+  }
+  if (style === 'rh') {
+    return {
+      ...fallbackVisuals(legacyStyle),
+      ...(prev || {}),
+      style,
+      iconPack: 'default',
+      canvasPattern: 'hub',
+      nodeFrame: 'hub-card',
+      headerMark: prev?.headerMark || 'RH',
+    };
+  }
+  if (style === 'tech') {
+    return {
+      ...fallbackVisuals(legacyStyle),
+      ...(prev || {}),
+      style,
+      iconPack: 'default',
+      canvasPattern: 'circuit',
+      nodeFrame: 'glass',
+    };
+  }
+  return {
+    ...fallbackVisuals(legacyStyle),
+    ...(prev || {}),
+    style,
+    iconPack: 'default',
+    canvasPattern: style === 'plain' ? 'none' : 'dots',
+    nodeFrame: style === 'plain' ? 'plain' : 'sticker',
+  };
+}
+
 function fallbackMusic(legacyStyle: LegacyThemeStyle, visuals?: ThemeVisuals): ThemeMusic {
   const visualStyle = visuals?.style;
   if (visualStyle === 'op') {
@@ -111,6 +156,16 @@ function fallbackMusic(legacyStyle: LegacyThemeStyle, visuals?: ThemeVisuals): T
       volume: 0.16,
       bpm: 96,
       copyrightNote: '原创航海冒险风循环；可替换为已授权音频 URL。',
+    };
+  }
+  if (visualStyle === 'rh') {
+    return {
+      title: 'RunningHub Pulse Loop',
+      preset: 'rh-pulse',
+      source: 'synth',
+      volume: 0.14,
+      bpm: 104,
+      copyrightNote: '原创 RH 工作台氛围合成循环；可替换为已授权音频 URL。',
     };
   }
   if (legacyStyle === 'tech' || visualStyle === 'tech') {
@@ -493,25 +548,14 @@ export default function ThemeTemplateManager({ open, onClose }: ThemeTemplateMan
                   value={visuals.style}
                   onChange={(e) => {
                     const style = e.target.value as ThemeVisuals['style'];
-                    setEditor((prev) => ({
-                      ...prev,
-                      visuals: {
-                        ...fallbackVisuals(prev.legacyStyle),
-                        ...(prev.visuals || {}),
-                        style,
-                        iconPack: style === 'op' ? 'op' : prev.visuals?.iconPack || 'default',
-                        canvasPattern: style === 'op' ? 'map' : style === 'tech' ? 'circuit' : 'dots',
-                        nodeFrame: style === 'op' ? 'wanted' : style === 'tech' ? 'glass' : 'sticker',
-                      },
-                      music: fallbackMusic(prev.legacyStyle, {
-                        ...fallbackVisuals(prev.legacyStyle),
-                        ...(prev.visuals || {}),
-                        style,
-                        iconPack: style === 'op' ? 'op' : prev.visuals?.iconPack || 'default',
-                        canvasPattern: style === 'op' ? 'map' : style === 'tech' ? 'circuit' : 'dots',
-                        nodeFrame: style === 'op' ? 'wanted' : style === 'tech' ? 'glass' : 'sticker',
-                      }),
-                    }));
+                    setEditor((prev) => {
+                      const nextVisuals = visualDefaultsFor(style, prev.legacyStyle, prev.visuals);
+                      return {
+                        ...prev,
+                        visuals: nextVisuals,
+                        music: fallbackMusic(prev.legacyStyle, nextVisuals),
+                      };
+                    });
                   }}
                 >
                   {VISUAL_STYLE_OPTIONS.map((item) => (

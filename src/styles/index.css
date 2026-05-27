@@ -3,6 +3,7 @@
 @import './theme-pixel.css';
 @import './theme-core.css';
 @import './theme-op.css';
+@import './theme-rh.css';
 
 @tailwind base;
 @tailwind components;

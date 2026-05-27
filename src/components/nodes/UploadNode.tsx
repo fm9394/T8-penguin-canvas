@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
+import { memo, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { Handle, Position, useReactFlow, type Node, type Edge, type NodeProps } from '@xyflow/react';
 import {
   AlertCircle,
@@ -12,12 +12,15 @@ import {
 } from 'lucide-react';
 import { useUpdateNodeData } from './useUpdateNodeData';
 import { useThemeStore } from '../../stores/theme';
+import { useHiddenFeatureStore, isRhDuckUploadEnabled } from '../../stores/hiddenFeatures';
 import { PORT_COLOR } from '../../config/portTypes';
 import { useRunTrigger } from '../../hooks/useRunTrigger';
 import { useDragMaterialStore, type MaterialPayload } from '../../stores/dragMaterial';
 import ImageEditModal, { type ImageEditProduceMeta } from './ImageEditModal';
 import ResizableCorners from './ResizableCorners';
 import CollectionSplitButton from '../CollectionSplitButton';
+import { decodeDuckFiles, type DuckDecodeFileItem } from '../../services/api';
+import { resolveThemeTemplate } from '../../theme/defaultTemplates';
 import {
   createOutputDataFromItems,
   createUploadDataFromItem,
@@ -98,9 +101,18 @@ function inferKindFromFile(file: File): UploadKind | null {
 
 const UploadNode = ({ id, data, selected }: NodeProps) => {
   const update = useUpdateNodeData(id);
-  const { theme, style } = useThemeStore();
+  const { theme, style, templateId, customTemplates } = useThemeStore();
   const isDark = theme === 'dark';
   const isPixel = style === 'pixel';
+  const activeTemplate = useMemo(
+    () => resolveThemeTemplate(templateId, customTemplates),
+    [templateId, customTemplates],
+  );
+  const isRhDomVisual =
+    typeof document !== 'undefined' && document.documentElement.dataset.themeVisual === 'rh';
+  const isRhVisual = activeTemplate.visuals?.style === 'rh' || isRhDomVisual;
+  const rhDuckUploadIds = useHiddenFeatureStore((s) => s.rhDuckUploadIds);
+  const clearRhDuckUpload = useHiddenFeatureStore((s) => s.clearRhDuckUpload);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const rf = useReactFlow();
 
@@ -115,6 +127,12 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
   const meta = uploadType ? KIND_META[uploadType] : null;
   const mediaItems = uploadType ? getMediaItemsFromData(d, uploadType) : [];
   const url: string | undefined = mediaItems[0]?.url;
+  const rhDuckMode = Boolean(
+    isRhVisual &&
+      uploadType === 'image' &&
+      mediaItems.length > 0 &&
+      isRhDuckUploadEnabled(rhDuckUploadIds, id),
+  );
 
   // 节点本地尺寸 state: 默认 (260, 高度由内容撑开 — 上传后图/视频会撑高 root)
   // 拖角后由 ResizableCorners onResize 同步具体 px (保证 measured 准确 + keepAspectRatio 生效 + handleBounds 准确)
@@ -133,45 +151,106 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
       setError(msg);
       throw new Error(msg);
     }
-    // 防重复检测
     const edges = rf.getEdges();
     const nodes = rf.getNodes();
-    const dupExisted = edges.some((e) => {
-      if (e.source !== id) return false;
-      const t = nodes.find((n) => n.id === e.target);
-      if (!t || t.type !== 'output') return false;
-      const td = (t.data as any) || {};
-      return sameMediaUrls(getMediaItemsFromData(td, uploadType), mediaItems);
-    });
-    if (dupExisted) {
-      // 已有指向同一 url 的下游 OutputNode, 不重复创建
-      return;
+
+    const toDecodedMediaItem = (source: MediaItem, decoded?: DuckDecodeFileItem): MediaItem | null => {
+      if (!decoded?.decoded || !decoded.url) return null;
+      if (decoded.kind !== 'image' && decoded.kind !== 'video' && decoded.kind !== 'audio') return null;
+      return {
+        kind: decoded.kind,
+        url: decoded.url,
+        name: decoded.filename || source.name,
+        size: decoded.size,
+        mime: decoded.mime || source.mime,
+      };
+    };
+
+    let outputGroups: Array<{ kind: MediaKind; items: MediaItem[] }> = [{ kind: uploadType, items: mediaItems }];
+    let outputFromRhDuckDecode = false;
+    if (rhDuckMode && uploadType === 'image') {
+      try {
+        const decoded = await decodeDuckFiles(mediaItems.map((item) => item.url));
+        if (decoded.decodedCount > 0) {
+          const decodedBySource = new Map(decoded.items.map((item) => [item.sourceUrl, item]));
+          const grouped = new Map<MediaKind, MediaItem[]>();
+          const push = (item: MediaItem) => {
+            const list = grouped.get(item.kind) || [];
+            list.push(item);
+            grouped.set(item.kind, list);
+          };
+          mediaItems.forEach((item) => {
+            const decodedItem = toDecodedMediaItem(item, decodedBySource.get(item.url));
+            if (decodedItem) push(decodedItem);
+          });
+          const decodedGroups = Array.from(grouped.entries()).map(([kind, items]) => ({ kind, items }));
+          if (decodedGroups.length > 0) {
+            outputGroups = decodedGroups;
+            outputFromRhDuckDecode = true;
+          }
+        }
+      } catch (e) {
+        console.warn('[UploadNode] RH duck decode failed, fallback to normal upload output', e);
+      }
     }
+
+    const groupsToCreate = outputGroups.filter(({ kind, items }) => {
+      if (items.length === 0) return false;
+      return !edges.some((e) => {
+        if (e.source !== id) return false;
+        const t = nodes.find((n) => n.id === e.target);
+        if (!t || t.type !== 'output') return false;
+        const td = (t.data as any) || {};
+        return sameMediaUrls(getMediaItemsFromData(td, kind), items);
+      });
+    });
+    if (groupsToCreate.length === 0) return;
+
     const me = rf.getNode(id);
     const myW = (me as any)?.measured?.width || (me as any)?.width || 320;
     const baseX = (me?.position?.x ?? 0) + myW + 80;
     const baseY = me?.position?.y ?? 0;
     const ts = Date.now();
-    const newId = `output-auto-up-${id}-${ts}-${Math.random().toString(36).slice(2, 6)}`;
-    // 按 uploadType 写入 direct* 字段；多文件上传会成为一个合集 OutputNode。
-    const dataPatch = createOutputDataFromItems(uploadType, mediaItems);
-    // v1.2.10.5: 防重叠 —— 单节点螺线避让
-    const _finalPos = placeSingleNode(baseX, baseY, 'output', nodes, { source: `placement:upload-auto:${id}` });
-    const newNode: Node = {
-      id: newId,
-      type: 'output',
-      position: { x: _finalPos.x, y: _finalPos.y },
-      data: dataPatch,
-      selected: false,
-    } as Node;
-    const newEdge: Edge = {
-      id: `e-auto-up-${newId}`,
+    const _sz = defaultSizeOf('output');
+    const _singlePos = groupsToCreate.length === 1
+      ? placeSingleNode(baseX, baseY, 'output', nodes, { source: `placement:upload-auto:${id}` })
+      : null;
+    const _desired: PlacementRect[] = groupsToCreate.map((_, i) => ({
+      x: _singlePos?.x ?? baseX,
+      y: _singlePos?.y ?? baseY + i * Math.max(280, _sz.h + 40),
+      w: _sz.w,
+      h: _sz.h,
+    }));
+    const _off = groupsToCreate.length === 1
+      ? { dx: 0, dy: 0 }
+      : placeBatchNodes(_desired, nodes, { source: `placement:upload-auto:${id}` });
+    const newNodes: Node[] = groupsToCreate.map(({ kind, items }, i) => {
+      const newId = `output-auto-up-${id}-${ts}-${kind}-${i}-${Math.random().toString(36).slice(2, 6)}`;
+      return {
+        id: newId,
+        type: 'output',
+        position: {
+          x: _desired[i].x + _off.dx,
+          y: _desired[i].y + _off.dy,
+        },
+        data: {
+          ...createOutputDataFromItems(kind, items),
+          ...(outputFromRhDuckDecode ? { rhDuckDecoded: true, rhDuckSourceNodeId: id } : {}),
+        },
+        selected: false,
+      } as Node;
+    });
+    const newEdges: Edge[] = newNodes.map((node) => ({
+      id: `e-auto-up-${node.id}`,
       source: id,
-      target: newId,
+      target: node.id,
       type: 'deletable',
-    } as Edge;
-    rf.addNodes(newNode);
-    rf.setEdges((eds) => [...eds, newEdge]);
+      ...(outputFromRhDuckDecode
+        ? { className: 'rh-duck-edge', data: { rhDuckEdge: true } }
+        : {}),
+    } as Edge));
+    rf.addNodes(newNodes);
+    rf.setEdges((eds) => [...eds, ...newEdges]);
   };
 
   // 接入运行总线, 供 NodeActionBar / 批量运行 调起
@@ -189,6 +268,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
 
   /** 重置:清空所有字段,回到默认拖拽上传状态 */
   const handleReset = () => {
+    clearRhDuckUpload(id);
     update({
       uploadType: null,
       imageUrl: undefined,
@@ -366,16 +446,18 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
 
   // ==================== 渲染 ====================
   const handleColor = meta?.color || PORT_COLOR.any;
+  const effectiveHandleColor = rhDuckMode ? '#ff345f' : handleColor;
   const headerLabel = meta ? `上传${meta.label}` : '上传素材';
   const totalSize = mediaItems.reduce((sum, item) => sum + (item.size || 0), 0);
 
   return (
     <div
+      data-rh-duck-mode={rhDuckMode ? 'true' : undefined}
       className="relative rounded-xl border-2 transition-colors flex flex-col"
       style={{
         background: isDark ? 'rgba(20,20,22,.92)' : 'rgba(255,255,255,.96)',
         backdropFilter: 'blur(8px)',
-        borderColor: selected ? handleColor : isDark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.1)',
+        borderColor: selected || rhDuckMode ? effectiveHandleColor : isDark ? 'rgba(255,255,255,.15)' : 'rgba(0,0,0,.1)',
         width: size.w,
         height: size.h, // undefined → auto, 上传后被图/视频自然撑高; 拖角后具体 px
         minWidth: 220,
@@ -387,7 +469,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
         selected={selected}
         minWidth={220}
         minHeight={180}
-        accent={handleColor}
+        accent={effectiveHandleColor}
         onResize={(_e, p) => setSize({ w: p.width, h: p.height })}
       />
       {/* 选中时浮动「Edit」按钮 — 仅图像类型可用，与双击预览图等价 */}
@@ -408,11 +490,11 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
             padding: '4px 10px',
             height: 26,
             background: isDark ? 'rgba(28,28,32,0.92)' : 'rgba(255,255,255,0.95)',
-            color: handleColor,
-            border: `1px solid ${handleColor}66`,
+            color: effectiveHandleColor,
+            border: `1px solid ${effectiveHandleColor}66`,
             borderRadius: isPixel ? 0 : 6,
             boxShadow: isPixel
-              ? `2px 2px 0 ${handleColor}`
+              ? `2px 2px 0 ${effectiveHandleColor}`
               : isDark
                 ? '0 6px 24px rgba(0,0,0,0.4)'
                 : '0 6px 24px rgba(0,0,0,0.12)',
@@ -431,7 +513,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
         type="source"
         position={Position.Right}
         className="!border-0"
-        style={{ background: handleColor, width: 10, height: 10 }}
+        style={{ background: effectiveHandleColor, width: 10, height: 10 }}
         title={meta ? `输出 ${meta.label}` : '请先选择类型'}
       />
 
@@ -444,9 +526,9 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
         <div
           className="w-6 h-6 rounded flex items-center justify-center"
           style={{
-            background: handleColor + '33',
-            color: handleColor,
-            boxShadow: `inset 0 0 0 1px ${handleColor}66`,
+            background: effectiveHandleColor + '33',
+            color: effectiveHandleColor,
+            boxShadow: `inset 0 0 0 1px ${effectiveHandleColor}66`,
           }}
         >
           {meta ? <meta.icon size={13} /> : <UploadIcon size={13} />}
@@ -498,9 +580,9 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
                   ? 'border-white/15 hover:border-white/30 text-white/60'
                   : 'border-black/15 hover:border-black/30 text-zinc-500'
             }`}
-            style={dragActive ? { borderColor: handleColor } : undefined}
+            style={dragActive ? { borderColor: effectiveHandleColor } : undefined}
           >
-            <UploadIcon size={22} className="mb-1.5" style={{ color: handleColor }} />
+            <UploadIcon size={22} className="mb-1.5" style={{ color: effectiveHandleColor }} />
             <span className="font-medium">
               {uploading ? '上传中...' : dragActive ? '松开以上传' : '点击或拖拽文件'}
             </span>
@@ -662,7 +744,7 @@ const UploadNode = ({ id, data, selected }: NodeProps) => {
               isDark ? 'text-white/30' : 'text-zinc-400'
             }`}
           >
-            → 输出 {meta.label} (端口色 <span style={{ color: handleColor }}>●</span>)
+            → 输出 {meta.label} (端口色 <span style={{ color: effectiveHandleColor }}>●</span>)
           </div>
         )}
       </div>

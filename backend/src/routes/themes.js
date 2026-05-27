@@ -6,12 +6,12 @@ const config = require('../config');
 const router = express.Router();
 const SCHEMA = 't8-theme-template';
 const VERSION = 2;
-const VISUAL_STYLES = new Set(['plain', 'tech', 'pixel', 'op']);
+const VISUAL_STYLES = new Set(['plain', 'tech', 'pixel', 'op', 'rh']);
 const INTENSITIES = new Set(['subtle', 'medium', 'strong']);
 const ICON_PACKS = new Set(['default', 'op']);
-const CANVAS_PATTERNS = new Set(['none', 'dots', 'map', 'circuit', 'confetti']);
-const NODE_FRAMES = new Set(['plain', 'glass', 'sticker', 'wanted']);
-const MUSIC_PRESETS = new Set(['tech-pulse', 'pixel-pop', 'grand-line-adventure']);
+const CANVAS_PATTERNS = new Set(['none', 'dots', 'map', 'circuit', 'confetti', 'hub']);
+const NODE_FRAMES = new Set(['plain', 'glass', 'sticker', 'wanted', 'hub-card']);
+const MUSIC_PRESETS = new Set(['tech-pulse', 'pixel-pop', 'grand-line-adventure', 'rh-pulse']);
 const MUSIC_SOURCES = new Set(['synth', 'url', 'upload']);
 
 function loadSettings() {
@@ -64,6 +64,8 @@ function normalizeVisuals(raw, legacyStyle) {
       ? source.canvasPattern
       : style === 'op'
         ? 'map'
+        : style === 'rh'
+          ? 'hub'
         : style === 'tech'
           ? 'circuit'
           : 'dots',
@@ -71,6 +73,8 @@ function normalizeVisuals(raw, legacyStyle) {
       ? source.nodeFrame
       : style === 'op'
         ? 'wanted'
+        : style === 'rh'
+          ? 'hub-card'
         : style === 'tech'
           ? 'glass'
           : 'sticker',
@@ -88,6 +92,16 @@ function defaultMusicFor(legacyStyle, visuals) {
       volume: 0.16,
       bpm: 96,
       copyrightNote: '原创航海冒险风循环；可替换为已授权音频 URL。',
+    };
+  }
+  if (style === 'rh') {
+    return {
+      title: 'RunningHub Pulse Loop',
+      preset: 'rh-pulse',
+      source: 'synth',
+      volume: 0.14,
+      bpm: 104,
+      copyrightNote: '原创 RH 工作台氛围合成循环；可替换为已授权音频 URL。',
     };
   }
   if (legacyStyle === 'tech' || style === 'tech') {

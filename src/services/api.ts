@@ -4,6 +4,7 @@
  */
 import type { ApiSettings, CanvasData, CanvasListItem } from '../types/canvas';
 import type { ThemeTemplate } from '../theme/types';
+import type { MediaKind } from '../utils/mediaCollection';
 
 const BASE = '/api';
 
@@ -131,6 +132,34 @@ export async function saveAssetToDisk(
   } catch (e: any) {
     return { ok: false, error: e?.message || String(e) };
   }
+}
+
+export interface DuckDecodeFileItem {
+  sourceUrl: string;
+  decoded: boolean;
+  url?: string;
+  filename?: string;
+  size?: number;
+  kind?: MediaKind;
+  mime?: string;
+  originalExt?: string;
+  ext?: string;
+  isDuck?: boolean;
+  passwordProtected?: boolean;
+  reason?: string;
+}
+
+export async function decodeDuckFiles(
+  urls: string[],
+): Promise<{ items: DuckDecodeFileItem[]; decodedCount: number }> {
+  const res = await request<{
+    success: boolean;
+    data: { items: DuckDecodeFileItem[]; decodedCount: number };
+  }>(`${BASE}/files/duck-decode`, {
+    method: 'POST',
+    body: JSON.stringify({ urls }),
+  });
+  return res.data || { items: [], decodedCount: 0 };
 }
 
 // ========== RH 工具节点 (v1.2.10+) ==========

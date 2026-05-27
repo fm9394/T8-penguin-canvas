@@ -2843,6 +2843,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       if (!target) return false;
       const button = target.closest('button, [role="button"]') as HTMLElement | null;
       if (!button) return false;
+      if (button.closest('[data-node-action-bar]')) return false;
       return !!button.closest('.react-flow__node, [data-node-action-bar]');
     };
 

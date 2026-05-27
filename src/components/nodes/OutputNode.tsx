@@ -12,6 +12,7 @@ import { MonitorPlay, Type as TypeIcon, Image as ImageIcon, Video as VideoIcon, 
 import { useUpdateNodeData } from './useUpdateNodeData';
 import { useThemeStore } from '../../stores/theme';
 import { PORT_COLOR } from '../../config/portTypes';
+import { resolveThemeTemplate } from '../../theme/defaultTemplates';
 import ImageEditModal, { type ImageEditProduceMeta } from './ImageEditModal';
 import ImageCompareModal from '../ImageCompareModal';
 import CollectionSplitButton from '../CollectionSplitButton';
@@ -83,10 +84,18 @@ interface Collected {
 
 const OutputNode = ({ id, data, selected }: NodeProps) => {
   const update = useUpdateNodeData(id);
-  const { theme } = useThemeStore();
+  const { theme, templateId, customTemplates } = useThemeStore();
   const isDark = theme === 'dark';
   const d = (data as any) || {};
   const rf = useReactFlow();
+  const activeTemplate = useMemo(
+    () => resolveThemeTemplate(templateId, customTemplates),
+    [templateId, customTemplates],
+  );
+  const isRhDomVisual =
+    typeof document !== 'undefined' && document.documentElement.dataset.themeVisual === 'rh';
+  const isRhVisual = activeTemplate.visuals?.style === 'rh' || isRhDomVisual;
+  const isRhDuckOutput = Boolean(isRhVisual && d.rhDuckDecoded);
 
   // 节点本地尺寸 state: 默认 (320, 高度由内容撑开)
   // 拖角后由 ResizableCorners onResize 同步具体 px — 保证节点始终有具体尺寸 → wrapper measured 准确
@@ -210,38 +219,40 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
       arr.push(s);
     };
 
-    const list = Array.isArray(upstreamNodes) ? upstreamNodes : [];
-    for (const n of list) {
-      const ud: any = n?.data || {};
-      const sid = (n as any)?.id || '';
-      const handles = handleMap.get(sid) || new Set<string | null>([null]);
+    const directOnlyOutput = Boolean(d.rhDuckDecoded);
+    if (!directOnlyOutput) {
+      const list = Array.isArray(upstreamNodes) ? upstreamNodes : [];
+      for (const n of list) {
+        const ud: any = n?.data || {};
+        const sid = (n as any)?.id || '';
+        const handles = handleMap.get(sid) || new Set<string | null>([null]);
 
-      // 显式素材集: 按内部顺序透传；跳过旧字段读取，避免素材集同步字段造成重复。
-      if ((n as any)?.type === 'material-set' && Array.isArray(ud.materialSetItems)) {
-        const buckets = collectMaterialSetBucketsFromData(ud);
-        buckets.text.forEach((item) => pushTextSegment(out.texts, valueOfMaterialSetItem(item)));
-        buckets.image.forEach((item) => pushUnique(out.images, item.url));
-        buckets.video.forEach((item) => pushUnique(out.videos, item.url));
-        buckets.audio.forEach((item) => pushUnique(out.audios, item.url));
-        continue;
-      }
+        // 显式素材集: 按内部顺序透传；跳过旧字段读取，避免素材集同步字段造成重复。
+        if ((n as any)?.type === 'material-set' && Array.isArray(ud.materialSetItems)) {
+          const buckets = collectMaterialSetBucketsFromData(ud);
+          buckets.text.forEach((item) => pushTextSegment(out.texts, valueOfMaterialSetItem(item)));
+          buckets.image.forEach((item) => pushUnique(out.images, item.url));
+          buckets.video.forEach((item) => pushUnique(out.videos, item.url));
+          buckets.audio.forEach((item) => pushUnique(out.audios, item.url));
+          continue;
+        }
 
       // === v1.2.9.0: 循环累积模式 —— 上游节点被 LoopNode 标记 __loopAccumulate 时,
       //             跳过该上游的 fresh 字段收集 (让本节点 direct*Urls / directOutputText 的累积值独占显示)。
       //             这样跨轮产物不会被生成节点「本轮覆盖」的 fresh 担换, 循环结束后标记被 LoopNode 清除, 恢复正常透传。
-      if (ud.__loopAccumulate) continue;
+        if (ud.__loopAccumulate) continue;
 
       // 文本: textSegments/texts 数组优先, 避免文本分割节点再把 joined prompt 当成第 N+1 项
-      const textArrayFields = ['textSegments', 'segments', 'texts'];
-      const textArrayField = textArrayFields.find((f) => Array.isArray(ud[f]) && ud[f].length > 0);
-      if (textArrayField) {
-        ud[textArrayField].forEach((item: any) => pushTextSegment(out.texts, item));
-      } else {
-        pushUniqueText(out.texts, ud.outputText);
-        pushUniqueText(out.texts, ud.reply);
-        pushUniqueText(out.texts, ud.prompt);
-        pushUniqueText(out.texts, ud.text);
-      }
+        const textArrayFields = ['textSegments', 'segments', 'texts'];
+        const textArrayField = textArrayFields.find((f) => Array.isArray(ud[f]) && ud[f].length > 0);
+        if (textArrayField) {
+          ud[textArrayField].forEach((item: any) => pushTextSegment(out.texts, item));
+        } else {
+          pushUniqueText(out.texts, ud.outputText);
+          pushUniqueText(out.texts, ud.reply);
+          pushUniqueText(out.texts, ud.prompt);
+          pushUniqueText(out.texts, ud.text);
+        }
 
       // === v1.2.8.4: FramePair 双端口语义 ===
       // 节点同时具备 firstFrameUrl + lastFrameUrl 字段时按 sourceHandle 过滤,
@@ -249,48 +260,49 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
       //   - 'last'  端口 → 只输出尾帧
       //   - null/默认  → 同时输出两帧 (autoOutput / 手动接默认 handle 的兼容)
       // 跳过通用 imageUrl/imageUrls 分支, 避免历史残留字段把双图都捞过来。
-      const isFramePair =
-        Object.prototype.hasOwnProperty.call(ud, 'firstFrameUrl') &&
-        Object.prototype.hasOwnProperty.call(ud, 'lastFrameUrl');
-      if (isFramePair) {
-        const wantFirst = handles.has('first') || (handles.has(null) && !handles.has('last'));
-        const wantLast = handles.has('last') || (handles.has(null) && !handles.has('first'));
-        if (wantFirst) pushUnique(out.images, ud.firstFrameUrl);
-        if (wantLast) pushUnique(out.images, ud.lastFrameUrl);
-        // 视频/音频 此节点不会有, 跳过
-        continue;
-      }
+        const isFramePair =
+          Object.prototype.hasOwnProperty.call(ud, 'firstFrameUrl') &&
+          Object.prototype.hasOwnProperty.call(ud, 'lastFrameUrl');
+        if (isFramePair) {
+          const wantFirst = handles.has('first') || (handles.has(null) && !handles.has('last'));
+          const wantLast = handles.has('last') || (handles.has(null) && !handles.has('first'));
+          if (wantFirst) pushUnique(out.images, ud.firstFrameUrl);
+          if (wantLast) pushUnique(out.images, ud.lastFrameUrl);
+          // 视频/音频 此节点不会有, 跳过
+          continue;
+        }
 
       // 图像 - 单
-      pushUnique(out.images, ud.imageUrl);
-      // 图像 - 多
-      const arrFields = ['imageUrls', 'urls', 'generatedImages'];
-      for (const f of arrFields) {
-        const v = ud[f];
-        if (Array.isArray(v)) v.forEach((u) => pushUnique(out.images, u));
-      }
+        pushUnique(out.images, ud.imageUrl);
+        // 图像 - 多
+        const arrFields = ['imageUrls', 'urls', 'generatedImages'];
+        for (const f of arrFields) {
+          const v = ud[f];
+          if (Array.isArray(v)) v.forEach((u) => pushUnique(out.images, u));
+        }
 
       // 视频
-      pushUnique(out.videos, ud.videoUrl);
+        pushUnique(out.videos, ud.videoUrl);
 
       // === v1.2.9.14: Suno 双端口语义 (与 FramePair 同模式) ===
       // AudioNode (Suno) 同时具备 audioUrl + audioUrl_1 字段时按 sourceHandle 过滤,
       //   - 'audio-0' → 主轨、 'audio-1' → 副轨、 null/默认 → 两轨
       // 跳过下面的通用 audioUrl/audioUrl_1 分支，避免重复加入。
-      const isSuno =
-        Object.prototype.hasOwnProperty.call(ud, 'audioUrl') &&
-        Object.prototype.hasOwnProperty.call(ud, 'audioUrl_1');
-      if (isSuno) {
-        const wantA0 = handles.has('audio-0') || (handles.has(null) && !handles.has('audio-1'));
-        const wantA1 = handles.has('audio-1') || (handles.has(null) && !handles.has('audio-0'));
-        if (wantA0) pushUnique(out.audios, ud.audioUrl);
-        if (wantA1) pushUnique(out.audios, ud.audioUrl_1);
-        continue;
-      }
+        const isSuno =
+          Object.prototype.hasOwnProperty.call(ud, 'audioUrl') &&
+          Object.prototype.hasOwnProperty.call(ud, 'audioUrl_1');
+        if (isSuno) {
+          const wantA0 = handles.has('audio-0') || (handles.has(null) && !handles.has('audio-1'));
+          const wantA1 = handles.has('audio-1') || (handles.has(null) && !handles.has('audio-0'));
+          if (wantA0) pushUnique(out.audios, ud.audioUrl);
+          if (wantA1) pushUnique(out.audios, ud.audioUrl_1);
+          continue;
+        }
 
-      // 音频 (audioUrl 主轨, audioUrl_1 副轨——AudioNode/SunoNode 双输出口)
-      pushUnique(out.audios, ud.audioUrl);
-      pushUnique(out.audios, ud.audioUrl_1);
+        // 音频 (audioUrl 主轨, audioUrl_1 副轨——AudioNode/SunoNode 双输出口)
+        pushUnique(out.audios, ud.audioUrl);
+        pushUnique(out.audios, ud.audioUrl_1);
+      }
     }
 
     // 独立模式 (双击编辑生成的产物 OutputNode):
@@ -378,7 +390,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
     }
 
     return out;
-  }, [upstreamNodes, upstreamSig, handleMap, d.pickKind, d.pickIndex, d.directImageUrl, d.directImageUrls, d.directVideoUrl, d.directVideoUrls, d.directAudioUrl, d.directAudioUrls, d.directOutputText, d.directTextSegments]);
+  }, [upstreamNodes, upstreamSig, handleMap, d.pickKind, d.pickIndex, d.directImageUrl, d.directImageUrls, d.directVideoUrl, d.directVideoUrls, d.directAudioUrl, d.directAudioUrls, d.directOutputText, d.directTextSegments, d.rhDuckDecoded]);
 
   // 文本编辑
   const overrideText: string = typeof d.outputText === 'string' ? d.outputText : '';
@@ -409,6 +421,8 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
   const isEdited = overrideText !== '' && overrideText !== liveText;
   const HANDLE = PORT_COLOR.any;
   const accent = '#5eead4'; // teal-300, 与 nodeRegistry color: 'teal' 对齐
+  const effectiveAccent = isRhDuckOutput ? '#ff345f' : accent;
+  const effectiveHandle = isRhDuckOutput ? '#ff345f' : HANDLE;
 
   const total = collected.texts.length + collected.images.length + collected.videos.length + collected.audios.length;
 
@@ -678,6 +692,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
 
   return (
     <div
+      data-rh-duck-output={isRhDuckOutput ? 'true' : undefined}
       className="relative flex flex-col"
       style={{ width: size.w, height: size.h, minWidth: 260 }}
       {...dropProps}
@@ -687,7 +702,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
         selected={selected}
         minWidth={260}
         minHeight={160}
-        accent={accent}
+        accent={effectiveAccent}
         onResize={(_e, p) => setSize({ w: p.width, h: p.height })}
       />
       {/* 选中时浮动「Edit」按钮 — 仅图像类型可用，与双击预览图等价 */}
@@ -708,8 +723,8 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
             padding: '4px 10px',
             height: 26,
             background: isDark ? 'rgba(28,28,32,0.92)' : 'rgba(255,255,255,0.95)',
-            color: accent,
-            border: `1px solid ${accent}66`,
+            color: effectiveAccent,
+            border: `1px solid ${effectiveAccent}66`,
             borderRadius: 6,
             boxShadow: isDark ? '0 6px 24px rgba(0,0,0,0.4)' : '0 6px 24px rgba(0,0,0,0.12)',
             cursor: 'pointer',
@@ -728,7 +743,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
         position={Position.Left}
         className="!border-0"
         style={{
-          background: HANDLE,
+          background: effectiveHandle,
           width: 12,
           height: 12,
           minWidth: 12,
@@ -747,7 +762,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
         position={Position.Right}
         className="!border-0"
         style={{
-          background: HANDLE,
+          background: effectiveHandle,
           width: 12,
           height: 12,
           minWidth: 12,
@@ -765,19 +780,20 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
       {/* 高度逻辑: root 默认 height=auto 时 内层也 auto 跟随内容自然高;
           root 拖角后有具体 px 时, 内层 flex-1 撑满剩余 + min-h-0 允许内容 overflow */}
       <div
+        data-rh-duck-output-frame={isRhDuckOutput ? 'true' : undefined}
         className={`rounded-xl border-2 transition-colors ${size.h ? 'flex-1 min-h-0' : ''}`}
         style={{
           background: isDark ? 'rgb(20,20,22)' : 'rgb(255,255,255)',
           overflow: 'auto',
           width: '100%',
           borderColor: isAccepting
-            ? '#22c55e'
+            ? effectiveAccent
             : selected
-              ? accent
+              ? effectiveAccent
               : isDark
                 ? 'rgba(255,255,255,.15)'
                 : 'rgba(0,0,0,.1)',
-          boxShadow: isAccepting ? '0 0 0 3px rgba(34,197,94,0.25)' : undefined,
+          boxShadow: isAccepting ? `0 0 0 3px ${effectiveAccent}40` : undefined,
         }}
       >
 
@@ -790,9 +806,9 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
         <div
           className="w-6 h-6 rounded flex items-center justify-center"
           style={{
-            background: accent + '33',
-            color: accent,
-            boxShadow: `inset 0 0 0 1px ${accent}66`,
+            background: effectiveAccent + '33',
+            color: effectiveAccent,
+            boxShadow: `inset 0 0 0 1px ${effectiveAccent}66`,
           }}
         >
           <MonitorPlay size={13} />
@@ -886,7 +902,7 @@ const OutputNode = ({ id, data, selected }: NodeProps) => {
                   <button
                     onClick={saveEdit}
                     className="text-[10px] px-2 py-0.5 rounded flex items-center gap-1 text-zinc-900"
-                    style={{ background: accent }}
+                    style={{ background: effectiveAccent }}
                   >
                     <Check size={10} /> 保存
                   </button>

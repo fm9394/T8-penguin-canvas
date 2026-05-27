@@ -12,11 +12,14 @@
  *   - 状态联动: 当前节点正在运行时, ▶ RUN 自动切换为 ■ STOP
  *   - 智能定位: 锚定节点右上角往上偏移, 让按钮组与节点保持 8px 间距
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNodes, useViewport, useReactFlow, type Node } from '@xyflow/react';
 import { Play, Square, X } from 'lucide-react';
 import { useThemeStore } from '../stores/theme';
 import { useRunBusStore } from '../stores/runBus';
+import { useHiddenFeatureStore, isRhDuckUploadEnabled } from '../stores/hiddenFeatures';
+import { resolveThemeTemplate } from '../theme/defaultTemplates';
+import { getMediaItemsFromData } from '../utils/mediaCollection';
 
 // 与 Canvas.tsx 一致 (需要保持同步; 后续可考虑抽到 config/constants)
 const EXECUTABLE_NODE_TYPES = new Set<string>([
@@ -40,13 +43,25 @@ const NodeActionBar = () => {
   const nodes = useNodes();
   const { x: vx, y: vy, zoom } = useViewport();
   const { setNodes } = useReactFlow();
-  const { theme, style } = useThemeStore();
+  const { theme, style, templateId, customTemplates } = useThemeStore();
   const isDark = theme === 'dark';
   const isPixel = style === 'pixel';
+  const activeTemplate = useMemo(
+    () => resolveThemeTemplate(templateId, customTemplates),
+    [templateId, customTemplates],
+  );
+  const isRhDomVisual =
+    typeof document !== 'undefined' && document.documentElement.dataset.themeVisual === 'rh';
+  const isRhVisual = activeTemplate.visuals?.style === 'rh' || isRhDomVisual;
 
   const currentRunId = useRunBusStore((s) => s.currentRunId);
   const triggerRun = useRunBusStore((s) => s.triggerRun);
   const cancelAll = useRunBusStore((s) => s.cancelAll);
+  const rhDuckUploadIds = useHiddenFeatureStore((s) => s.rhDuckUploadIds);
+  const toggleRhDuckUpload = useHiddenFeatureStore((s) => s.toggleRhDuckUpload);
+  const holdTimerRef = useRef<number | null>(null);
+  const suppressClickRef = useRef(false);
+  const [holdArmed, setHoldArmed] = useState(false);
 
   // 找选中的可执行节点 (只取第一个; 多选时仅最后选中的那个显示)
   const selectedExe = useMemo<Node | null>(() => {
@@ -59,6 +74,34 @@ const NodeActionBar = () => {
     }
     return null;
   }, [nodes]);
+
+  const selectedData = (selectedExe?.data || {}) as any;
+  const rhDuckEligible = Boolean(
+    isRhVisual &&
+      selectedExe?.type === 'upload' &&
+      selectedData.uploadType === 'image' &&
+      getMediaItemsFromData(selectedData, 'image').length > 0,
+  );
+  const rhDuckMode = isRhDuckUploadEnabled(rhDuckUploadIds, selectedExe?.id);
+
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    setHoldArmed(false);
+  };
+
+  useEffect(
+    () => () => {
+      if (holdTimerRef.current) window.clearTimeout(holdTimerRef.current);
+    },
+    [],
+  );
+  useEffect(() => {
+    clearHoldTimer();
+    suppressClickRef.current = false;
+  }, [selectedExe?.id, isRhVisual]);
 
   if (!selectedExe) return null;
 
@@ -96,8 +139,38 @@ const NodeActionBar = () => {
 
   const onRun = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
     if (isRunning) return;
     triggerRun(selectedExe.id, 'single');
+  };
+  const onRunPointerDown = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    if (e.button !== 0 || isRunning || !rhDuckEligible || !selectedExe) return;
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    clearHoldTimer();
+    setHoldArmed(true);
+    holdTimerRef.current = window.setTimeout(() => {
+      toggleRhDuckUpload(selectedExe.id);
+      suppressClickRef.current = true;
+      holdTimerRef.current = null;
+      setHoldArmed(false);
+    }, 3000);
+  };
+  const onRunPointerEnd = (e: React.PointerEvent) => {
+    e.stopPropagation();
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    clearHoldTimer();
   };
   const onStop = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -108,11 +181,17 @@ const NodeActionBar = () => {
     setNodes((nds) => nds.map((n) => (n.id === selectedExe.id ? { ...n, selected: false } : n)));
   };
 
+  const runColor = rhDuckEligible && rhDuckMode
+    ? '#ff345f'
+    : holdArmed
+      ? '#fb7185'
+      : '#22c55e';
+
   // 按钮通用样式生成器
   const mkBtn = (kind: 'run' | 'stop' | 'close'): React.CSSProperties => {
     const color =
       kind === 'run'
-        ? '#22c55e' // green-500
+        ? runColor
         : kind === 'stop'
           ? '#f97316' // orange-500
           : '#ef4444'; // red-500
@@ -159,14 +238,14 @@ const NodeActionBar = () => {
   // hover 增强
   const onEnter = (e: React.MouseEvent, kind: 'run' | 'stop' | 'close') => {
     const color =
-      kind === 'run' ? '#22c55e' : kind === 'stop' ? '#f97316' : '#ef4444';
+      kind === 'run' ? runColor : kind === 'stop' ? '#f97316' : '#ef4444';
     if (isPixel) return;
     (e.currentTarget as HTMLElement).style.background = `${color}33`;
     (e.currentTarget as HTMLElement).style.borderColor = color;
   };
   const onLeave = (e: React.MouseEvent, kind: 'run' | 'stop' | 'close') => {
     const color =
-      kind === 'run' ? '#22c55e' : kind === 'stop' ? '#f97316' : '#ef4444';
+      kind === 'run' ? runColor : kind === 'stop' ? '#f97316' : '#ef4444';
     if (isPixel) return;
     (e.currentTarget as HTMLElement).style.background =
       kind === 'run'
@@ -231,6 +310,10 @@ const NodeActionBar = () => {
           <button
             type="button"
             onClick={onRun}
+            onPointerDown={onRunPointerDown}
+            onPointerUp={onRunPointerEnd}
+            onPointerLeave={onRunPointerEnd}
+            onPointerCancel={onRunPointerEnd}
             onMouseEnter={(e) => onEnter(e, 'run')}
             onMouseLeave={(e) => onLeave(e, 'run')}
             title="执行此节点"

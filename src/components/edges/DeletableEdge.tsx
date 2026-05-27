@@ -21,8 +21,13 @@ export default function DeletableEdge(props: EdgeProps) {
     style,
     markerEnd,
     selected,
+    target,
+    data,
   } = props;
-  const { setEdges } = useReactFlow();
+  const { setEdges, getNode } = useReactFlow();
+  const targetNode = getNode(target);
+  const isRhDuckEdge = Boolean((data as any)?.rhDuckEdge || (targetNode?.data as any)?.rhDuckDecoded);
+  const edgeClassName = isRhDuckEdge ? 'rh-duck-edge' : undefined;
 
   const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
@@ -62,6 +67,7 @@ export default function DeletableEdge(props: EdgeProps) {
         id={id}
         path={edgePath}
         style={style}
+        className={edgeClassName}
         markerEnd={markerEnd}
         interactionWidth={24}
       />

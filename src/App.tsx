@@ -251,6 +251,7 @@ function App() {
   const isDark = theme === 'dark';
   const isPixel = style === 'pixel';
   const isOp = currentTemplate.visuals?.style === 'op';
+  const isRh = currentTemplate.visuals?.style === 'rh';
 
   const handleAddNode = (type: NodeType) => {
     addNodeRef.current?.(type);
@@ -287,7 +288,7 @@ function App() {
     <div
       className={`t8-app-shell h-screen flex flex-col overflow-hidden ${
         isPixel ? '' : isDark ? 'bg-zinc-950 text-white' : 'bg-zinc-50 text-zinc-900'
-      } ${isOp ? 't8-app-shell--op' : ''}`}
+      } ${isOp ? 't8-app-shell--op' : ''} ${isRh ? 't8-app-shell--rh' : ''}`}
       style={{ background: 'var(--t8-bg-app)', color: 'var(--t8-text-main)' }}
     >
       {/* 头部状态栏 */}
@@ -315,6 +316,20 @@ function App() {
                 </div>
               </div>
               <Sailboat className="t8-op-brand__ship" size={15} />
+            </div>
+          ) : isRh ? (
+            <div className="t8-rh-brand flex items-center gap-2">
+              <span className="t8-rh-brand__mark">
+                <Cloud size={16} />
+              </span>
+              <div className="min-w-0">
+                <h1 className="t8-rh-brand__title text-[14px] font-black leading-none">
+                  RH · 贞贞的无限画布
+                </h1>
+                <div className="t8-rh-brand__sub text-[9px] font-bold tracking-wide leading-none mt-0.5">
+                  RUNNINGHUB WORKSPACE
+                </div>
+              </div>
             </div>
           ) : isPixel ? (
             <>

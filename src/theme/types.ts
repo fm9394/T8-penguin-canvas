@@ -1,8 +1,8 @@
 export type ThemeMode = 'dark' | 'light';
 export type LegacyThemeStyle = 'tech' | 'pixel';
-export type ThemeVisualStyle = 'plain' | 'tech' | 'pixel' | 'op';
+export type ThemeVisualStyle = 'plain' | 'tech' | 'pixel' | 'op' | 'rh';
 export type ThemeIntensity = 'subtle' | 'medium' | 'strong';
-export type ThemeMusicPreset = 'tech-pulse' | 'pixel-pop' | 'grand-line-adventure';
+export type ThemeMusicPreset = 'tech-pulse' | 'pixel-pop' | 'grand-line-adventure' | 'rh-pulse';
 export type ThemeMusicSource = 'synth' | 'url' | 'upload';
 
 export interface ThemeTokens {
@@ -52,8 +52,8 @@ export interface ThemeVisuals {
   style: ThemeVisualStyle;
   intensity?: ThemeIntensity;
   iconPack?: 'default' | 'op';
-  canvasPattern?: 'none' | 'dots' | 'map' | 'circuit' | 'confetti';
-  nodeFrame?: 'plain' | 'glass' | 'sticker' | 'wanted';
+  canvasPattern?: 'none' | 'dots' | 'map' | 'circuit' | 'confetti' | 'hub';
+  nodeFrame?: 'plain' | 'glass' | 'sticker' | 'wanted' | 'hub-card';
   headerMark?: string;
 }
 

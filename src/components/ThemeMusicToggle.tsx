@@ -37,12 +37,21 @@ const PRESET_NOTES: Record<ThemeMusicPreset, Note[]> = {
     { freq: 784, at: 1.18, len: 0.26, type: 'triangle' },
     { freq: 659, at: 1.62, len: 0.18, type: 'sine' },
   ],
+  'rh-pulse': [
+    { freq: 196, at: 0, len: 0.11, type: 'sine' },
+    { freq: 294, at: 0.18, len: 0.08, type: 'triangle' },
+    { freq: 392, at: 0.36, len: 0.08, type: 'triangle' },
+    { freq: 523, at: 0.72, len: 0.11, type: 'sine' },
+    { freq: 440, at: 1.08, len: 0.08, type: 'triangle' },
+    { freq: 659, at: 1.34, len: 0.1, type: 'sine' },
+  ],
 };
 
 const PRESET_LOOP_SECONDS: Record<ThemeMusicPreset, number> = {
   'tech-pulse': 1.75,
   'pixel-pop': 1.08,
   'grand-line-adventure': 2.15,
+  'rh-pulse': 1.72,
 };
 
 function clampVolume(value?: number) {
