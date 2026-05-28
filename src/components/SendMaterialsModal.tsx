@@ -39,6 +39,15 @@ const MODE_OPTIONS: Array<{ value: SendTargetMode; label: string; desc: string; 
   { value: 'output', label: '输出素材', desc: '以输出素材节点展示，适合跨画布归档结果', icon: MonitorUp },
 ];
 
+function chunkModeLabel(label: string) {
+  const chars = Array.from(label);
+  const chunks: string[] = [];
+  for (let i = 0; i < chars.length; i += 2) {
+    chunks.push(chars.slice(i, i + 2).join(''));
+  }
+  return chunks;
+}
+
 const SEND_HISTORY_KEY = 't8.sendMaterials.history.v1';
 const MAX_SEND_HISTORY = 12;
 
@@ -307,6 +316,7 @@ export default function SendMaterialsModal({
                 {MODE_OPTIONS.map((opt) => {
                   const Icon = opt.icon;
                   const active = mode === opt.value;
+                  const labelChunks = chunkModeLabel(opt.label);
                   const activeCls = isPixel
                     ? 'bg-[var(--px-mint)] text-[var(--px-ink)] shadow-[3px_3px_0_var(--px-ink)] ring-2 ring-[var(--px-ink)]'
                     : 'border-[var(--t8-primary)] bg-[var(--t8-primary)] text-[var(--t8-on-primary)] shadow-lg shadow-[var(--t8-primary)]/25 ring-2 ring-[var(--t8-primary)]/35';
@@ -323,8 +333,17 @@ export default function SendMaterialsModal({
                       aria-pressed={active}
                       className={`relative text-left transition ${isPixel ? 'px-btn px-btn--sm' : 'rounded-md border px-3 py-2'} ${active ? activeCls : inactiveCls}`}
                     >
-                      <span className="flex items-center gap-2 pr-12 text-sm font-semibold"><Icon size={14} />{opt.label}</span>
-                      <span className="mt-1 block text-[11px] opacity-70">{opt.desc}</span>
+                      <span className="flex min-w-0 items-start gap-2 pr-12">
+                        <Icon size={14} className="mt-0.5 shrink-0" />
+                        <span className="grid w-10 shrink-0 gap-0.5 text-center text-sm font-semibold leading-4">
+                          {labelChunks.map((chunk, index) => (
+                            <span key={`${opt.value}-${index}`} className="whitespace-nowrap">
+                              {chunk}
+                            </span>
+                          ))}
+                        </span>
+                        <span className="min-w-0 flex-1 pt-0.5 text-[11px] font-normal leading-4 opacity-70">{opt.desc}</span>
+                      </span>
                       {active && (
                         <span className={`absolute right-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${isPixel ? 'bg-[var(--px-ink)] text-[var(--px-surface)]' : 'bg-black/20 text-current'}`}>
                           <CheckCircle2 size={11} />

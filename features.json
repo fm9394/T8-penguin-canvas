@@ -1,7 +1,7 @@
 {
   "$schema": "本文件为 T8-penguin-canvas 节点清单防丢失锁,任何节点删减都需要在 roadmap.md 中说明并更新本文件。",
-  "version": "1.6.3",
-  "lastUpdated": "2026-05-28-v1.6.3-send-materials-ux",
+  "version": "1.6.4",
+  "lastUpdated": "2026-05-29-v1.6.4-portrait-master-text-resize",
   "packaging": {
     "description": "Electron NSIS 桌面端打包链路(v1.2.1 起标准化, 严禁未明确指令主动打包)。完整产物拓扑: app.asar(electron/{main,loader,preload}.cjs + node_modules) + app.asar.unpacked(node_modules/sharp + @img) + resources/backend-enc/*.t8c(extraResources, asar 外) + resources/frontend(extraResources, asar 外)。前端版本号由 vite define 注入 __APP_VERSION__、Sidebar 左下角自动同步。",
     "scripts": {
@@ -16,9 +16,9 @@
       "T8PC_FRONTEND_DIST": "打包模式 = path.join(process.resourcesPath, 'frontend'); 开发模式 = <project>/dist",
       "T8PC_RES": "打包模式 = process.resourcesPath; 开发模式 = <project>"
     },
-    "version": "1.6.3",
-    "semverVersion": "1.6.3",
-    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；当前源码为 v1.6.3：补完跨画布发送第四阶段体验优化，发送弹窗新增最近发送画布、发送历史和重复素材提示；历史仅保存在本机 localStorage，点击历史可恢复目标画布和发送方式，重复同批素材会提示并继续沿用画布端替换旧批次机制。已通过 npm run build；本次未重新打包 Electron。",
+    "version": "1.6.4",
+    "semverVersion": "1.6.4",
+    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；当前源码为 v1.6.4：新增肖像大师基础版与 Avatar 分层预览，补充画布空白处 Z 缩放到全貌快捷键，修复文本节点手动缩放后输出端口和连线坐标分离的问题。已通过 npm run build；本次未重新打包 Electron。",
     "installer": "本次未打包 Electron；最近一次安装包为 dist_electron/T8-PenguinCanvas-Setup-1.5.5.exe (NSIS, 108.96 MB)",
     "checklist": [
       "运行 npm run encrypt 前确认已 npm install bytenode 且使用 Electron 内置 Node",
@@ -203,7 +203,7 @@
     ]
   },
   "repository": "https://github.com/T8mars/T8-penguin-canvas",
-  "totalNodes": 39,
+  "totalNodes": 40,
   "phases": {
     "phase0": {
       "label": "基础设施",
@@ -399,7 +399,7 @@
         "NODE_GROUPS 各分类 filter 补充 && !n.hidden 过滤隐藏节点",
         "Canvas.tsx 端口拖出后的候选选择器(candidateMetas) 首行补充 if (meta.hidden) return [] 过滤",
         "隐藏节点清单(13 个)——特殊节点 5: multi-angle-3d/panorama-720/penguin-portrait/portrait-metadata/storyboard-grid; 工具节点 6: drawing-board/browser/image-compare/frame-extractor/remove-bg/upscale; 辅助节点 2: edit/video-output",
-        "可见节点清单——input(2): upload/output; core(6): text/image/video/seedance/audio/llm; rh(2): runninghub/rh-config; utility(3): resize/combine/grid-crop; auxiliary(3): idea/bp/relay; toolbox(2): cinematic/video-motion —— 合计 18 个可见",
+        "历史可见节点清单记录：该段为 v1.0 隐藏节点阶段的快照；当前权威清单以 features.json categories 与 src/config/nodeRegistry.ts 为准。",
         "左侧侧边栏、右键画布空白区快添加(QUICK_NODES=input+core)、从 Handle 拖出后出现的能力匹配候选菜单三个入口均不再出现隐藏节点",
         "需要重新启用某个节点时,只需在 nodeRegistry.ts 对应行删除 hidden: true 即可,零代码改动"
       ]
@@ -1279,12 +1279,43 @@
         "发送目标初始化增加兜底：如果历史中的旧目标画布已不存在，会自动回退到当前画布或第一个可用画布，避免空目标导致用户迷惑。",
         "公开版本同步到 1.6.3：package.json、package-lock.json、vite.config.ts/js、electron/main.cjs、backend/src/config.js APP_VERSION、features.json、README.md 同步；skill.md 仅本地更新，继续禁止推送 GitHub。"
       ]
+    },
+    "phase83": {
+      "label": "肖像大师基础可用版 (roadmap phase 1)",
+      "status": "complete",
+      "items": [
+        "新增 roadmap.md，记录肖像大师四阶段开发要求：基础可用版、Avatar 可视预览、角色库与复用、高级随机与批量角色；负面约束暂不开发。",
+        "工具箱分类新增「肖像大师」节点，类型 portrait-master，节点只输出 prompt/text/metadata，不直接生成图片。",
+        "肖像大师内置基础人物、五官、头发、妆容、身体标记、服装、配饰、气质神情、画面控制 9 大类词库，每类至少 100 个可选词条，支持不选、锁定随机、权重与自定义补充。",
+        "节点默认输出英文 prompt，同时保留中文 UI 摘要；运行按钮复用工具箱输出协议，会创建或更新下游 OutputNode，也可手动连线给图像、视频、SD2.0、LLM、RunningHub 等节点消费。",
+        "UI 使用 t8-node / t8-card / t8-btn / t8-input / t8-mini-icon-button 主题语义类，随现有多主题模板自动适配。"
+      ]
+    },
+    "phase84": {
+      "label": "肖像大师 Avatar 可视预览 (roadmap phase 2)",
+      "status": "complete",
+      "items": [
+        "肖像大师节点的 Avatar 占位预览升级为轻量 SVG 分层预览，显示头发、脸型、肤色、眼睛、眉毛、嘴型、服装、发饰、眼镜/面饰、体表标记和氛围背景。",
+        "portraitMasterOptions 词库新增 previewTag / preview 元数据，并通过 resolvePortraitPreview(selection) 统一汇总预览状态，避免在 UI 里为每个词条写绘图分支。",
+        "配饰大类补充「眼镜/面饰」分组，包含圆框眼镜、护目镜、墨镜、单片眼镜、眼罩、口罩、机械面罩等 20 项，既参与 prompt 也驱动 Avatar 可视层。",
+        "Avatar 预览只提供创作方向感，不生成真实图片、不调用后端、不消耗 API；运行输出 metadata 会携带 preview 快照，方便后续角色库阶段复用。"
+      ]
+    },
+    "phase85": {
+      "label": "画布全貌快捷键与文本节点缩放坐标修复 (v1.6.4)",
+      "status": "complete",
+      "items": [
+        "新增画布空白处 Z 快捷键，调用 fitView 缩放到当前画布全貌；快捷键面板和 README 同步展示，输入框、节点、弹窗和侧边栏聚焦时不会误触。",
+        "修复文本节点手动拉大/缩小时输出端口与连线分离：ResizableCorners 透出 onResizeEnd，TextNode 在 resize 中、resize 结束和 DOM 尺寸实际变化后都刷新 ReactFlow node internals。",
+        "TextNode 使用 ResizeObserver + 双 requestAnimationFrame 兜底，确保 ReactFlow 读取的是最终落定后的 handleBounds，避免视觉节点尺寸与内部连线坐标晚一拍。",
+        "公开版本同步到 1.6.4：package.json、package-lock.json、vite.config.ts/js、electron/main.cjs、backend/src/config.js APP_VERSION、features.json、README.md 同步；skill.md 仅本地更新，继续禁止推送 GitHub。"
+      ]
     }
   },
   "categories": {
     "input": {
       "label": "素材资源",
-      "count": 3,
+      "count": 4,
       "nodes": [
         {
           "type": "upload",
@@ -1505,7 +1536,7 @@
     },
     "toolbox": {
       "label": "工具箱",
-      "count": 3,
+      "count": 4,
       "nodes": [
         {
           "type": "cinematic",
@@ -1521,6 +1552,11 @@
           "type": "multi-angle-visual",
           "label": "可视化多角度",
           "description": "可视化调节方位 / 俯仰 / 远近，支持批量角度、Prompt 模式、EN / 中切换、前后缀、镜头收藏、JSON 导入导出与运行输出到 OutputNode"
+        },
+        {
+          "type": "portrait-master",
+          "label": "肖像大师",
+          "description": "捏人 Prompt 设计器：9 大类词库，每类至少 100 个可选词条；支持 Avatar 分层预览、不选、随机、锁定、权重、自定义补充、默认英文 prompt 与运行输出到 OutputNode"
         }
       ]
     }
@@ -1997,7 +2033,8 @@
     "drawing-board",
     "cinematic",
     "video-motion",
-    "multi-angle-visual"
+    "multi-angle-visual",
+    "portrait-master"
   ],
   "nonExecutableNodeTypes": {
     "description": "不参与批量运行的节点(纯展示 / 参数记录 / 隐藏配置)",
@@ -2028,6 +2065,7 @@
     "右键点击节点/选区": "弹出菜单(组执行/打组/合并到素材集/复制/删除)",
     "打组后右上角 ▶": "执行组内所有节点",
     "打组后双击标题": "重命名节点组",
+    "Z": "焦点在画布空白处时缩小并查看画布全貌",
     "中键 / 右键拖动": "平移画布",
     "空格 + 拖拽": "平移画布(备选)",
     "ESC (拖拽素材中)": "取消跨节点拖拽"

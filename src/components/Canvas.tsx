@@ -86,6 +86,7 @@ import CombineNode from './nodes/CombineNode';
 import RemoveBgNode from './nodes/RemoveBgNode';
 import ImageCompareNode from './nodes/ImageCompareNode';
 import ToolboxParamNode from './nodes/ToolboxParamNode';
+import PortraitMasterNode from './nodes/PortraitMasterNode';
 import IdeaNode from './nodes/IdeaNode';
 import BpNode from './nodes/BpNode';
 import RelayNode from './nodes/RelayNode';
@@ -160,10 +161,11 @@ const SPECIFIC_NODES: Record<string, any> = {
   bp: BpNode,
   relay: RelayNode,
   'video-output': VideoOutputNode,
-  // Toolbox (3)
+  // Toolbox (4)
   cinematic: ToolboxParamNode,
   'video-motion': ToolboxParamNode,
   'multi-angle-visual': ToolboxParamNode,
+  'portrait-master': PortraitMasterNode,
   // Input (1) - 上传素材
   upload: UploadNode,
   // Output (1) - 输出素材(文本/图像/视频/音频 预览 + 文本双击编辑)
@@ -190,6 +192,14 @@ const INITIAL_DATA: Record<string, Record<string, any>> = {
   },
   cinematic: { kind: 'cinematic', cinematicLanguage: 'en', cinematicStrength: 'balanced' },
   'video-motion': { kind: 'video-motion', motionLanguage: 'en' },
+  'portrait-master': {
+    portraitLanguage: 'en',
+    portraitSelection: {},
+    portraitLocks: {},
+    portraitWeights: {},
+    portraitCustomText: '',
+    prompt: '',
+  },
   'text-split': {
     sourceText: '',
     splitMode: 'line',
@@ -281,7 +291,7 @@ const EXECUTABLE_NODE_TYPES = new Set<string>([
   // v1.2.8 工具节点 (循环器 / 从合集获取)
   'loop', 'pick-from-set',
   // v1.4.8: 工具箱文本节点也可点击 RUN 直接外挂 OutputNode
-  'cinematic', 'video-motion', 'multi-angle-visual',
+  'cinematic', 'video-motion', 'multi-angle-visual', 'portrait-master',
 ]);
 
 // 网格吸附步长 / 对齐阈值(世界坐标)
@@ -572,6 +582,25 @@ function isTextEditingTarget(target: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || !!el?.isContentEditable;
 }
 
+function isCanvasOverviewShortcutBlocked(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  const el = target as HTMLElement;
+  if (el === document.body || el === document.documentElement) return false;
+  if (isTextEditingTarget(el)) return true;
+  return !!el.closest(
+    [
+      'button',
+      'a',
+      '[role="button"]',
+      '[data-canvas-floating-ui]',
+      '.react-flow__node',
+      '.t8-canvas-toolbar',
+      '.t8-context-menu',
+      '.t8-sidebar',
+    ].join(','),
+  );
+}
+
 interface CanvasInnerProps {
   onAddNodeRef?: React.MutableRefObject<AddNodeFn | null>;
 }
@@ -588,7 +617,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   const isNaruto = visualStyle === 'naruto';
   const isEva = visualStyle === 'eva';
   const themeTokens = getTemplateMode(currentTemplate, theme).tokens;
-  const { screenToFlowPosition, setCenter, getViewport } = useReactFlow();
+  const { screenToFlowPosition, setCenter, getViewport, fitView } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -3311,6 +3340,32 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
           .filter((n) => n.selected && n.type !== 'groupBox')
           .map((n) => n.id);
         if (selIds.length >= 1) handleCreateGroup(selIds);
+      } else if (
+        !ctrl &&
+        !e.altKey &&
+        !e.shiftKey &&
+        !e.isComposing &&
+        e.key.toLowerCase() === 'z'
+      ) {
+        const activeEl = document.activeElement as HTMLElement | null;
+        if (
+          isCanvasOverviewShortcutBlocked(e.target) ||
+          isCanvasOverviewShortcutBlocked(activeEl) ||
+          document.querySelector(
+            [
+              '[data-canvas-floating-ui="image-compare-modal"]',
+              '[data-canvas-floating-ui="portrait-master-editor"]',
+              '[data-canvas-floating-ui="send-materials-modal"]',
+              '[data-canvas-floating-ui="picker-menu"]',
+              '[data-canvas-floating-ui="node-menu"]',
+              '[data-canvas-floating-ui="pane-menu"]',
+            ].join(','),
+          )
+        ) {
+          return;
+        }
+        e.preventDefault();
+        fitView({ padding: 0.18, duration: 420, minZoom: 0.05, maxZoom: 1.15 });
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         // xyflow 内置 Backspace 删除,但在节点未选中时仍可能删除连线;
         // 我们手动处理仅删除选中,避免输入边缘情况
@@ -3331,7 +3386,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         internalPasteTimerRef.current = null;
       }
     };
-  }, [histUndo, histRedo, handleCopy, handlePaste, handleDuplicate, handleDeleteSelected, handleCreateGroup, nodes, selectedCount]);
+  }, [histUndo, histRedo, handleCopy, handlePaste, handleDuplicate, handleDeleteSelected, handleCreateGroup, nodes, selectedCount, fitView]);
 
   // 全局滚轮拦截 —— 自动给所有节点内的 input / textarea / select / contenteditable
   // 挂上 wheel.stopPropagation()，让用户在文本框内可用鼠标滚轮滚动文字而不触发画布缩放。
