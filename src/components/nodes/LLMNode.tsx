@@ -39,7 +39,7 @@ import { defaultSizeOf, placeBatchNodes, type Rect as PlacementRect } from '../.
 
 /**
  * LLM / Vision 节点 —— 完全对齐 gpt-image-2-web Chat (index.html L1600 / L8128~L8400)
- *  - 5 个模型: gemini-3.1-flash-lite-preview(默认) / gpt-4o / gemini-3.1-pro-preview / gpt-5 / gpt-image-2-all
+ *  - 6 个模型: gemini-3.1-flash-lite-preview(默认) / gemini-3.5-flash / gpt-4o / gemini-3.1-pro-preview / gpt-5 / gpt-image-2-all
  *  - temperature(0~2) + max_tokens(100~128000)
  *  - 系统提示词 + localStorage 预设保存/加载
  *  - 图像上传(多模态 vision)

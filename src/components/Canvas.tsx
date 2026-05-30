@@ -651,6 +651,9 @@ const MEDIA_EXTENSIONS: Record<MediaKind, string[]> = {
   audio: ['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac'],
 };
 
+const INTERNAL_NODE_PASTE_DELAY_MS = 120;
+const EXTERNAL_MEDIA_PASTE_DEDUPE_MS = 900;
+
 function inferCanvasMediaKind(file: File): MediaKind | null {
   const mime = file.type || '';
   if (mime.startsWith('image/')) return 'image';
@@ -772,6 +775,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastCanvasPointerRef = useRef<{ x: number; y: number } | null>(null);
   const internalPasteTimerRef = useRef<number | null>(null);
+  const lastExternalMediaPasteRef = useRef<{ signature: string; at: number } | null>(null);
 
   // 拖线到空白处的候选节点菜单(connection picker)
   const [picker, setPicker] = useState<{
@@ -3519,18 +3523,26 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       if (!activeId || isTextEditingTarget(e.target)) return;
+      if (document.querySelector('.img-edit-overlay')) return;
       const files = collectCanvasMediaFiles(e.clipboardData);
       if (files.length === 0) return;
       if (internalPasteTimerRef.current) {
         window.clearTimeout(internalPasteTimerRef.current);
         internalPasteTimerRef.current = null;
       }
+      const signature = files
+        .map((file) => `${file.name}|${file.size}|${file.type}|${file.lastModified}`)
+        .join('||');
+      const now = Date.now();
+      const last = lastExternalMediaPasteRef.current;
       e.preventDefault();
       e.stopPropagation();
+      if (last?.signature === signature && now - last.at < EXTERNAL_MEDIA_PASTE_DEDUPE_MS) return;
+      lastExternalMediaPasteRef.current = { signature, at: now };
       void createUploadNodesFromFiles(files);
     };
-    window.addEventListener('paste', onPaste);
-    return () => window.removeEventListener('paste', onPaste);
+    window.addEventListener('paste', onPaste, true);
+    return () => window.removeEventListener('paste', onPaste, true);
   }, [activeId, createUploadNodesFromFiles]);
 
   const focusNearestNodeToViewport = useCallback(() => {
@@ -3585,11 +3597,14 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         e.preventDefault();
         handlePaste(true);
       } else if (ctrl && e.key.toLowerCase() === 'v') {
+        if (!clipboardRef.current?.nodes?.length) return;
         if (internalPasteTimerRef.current) window.clearTimeout(internalPasteTimerRef.current);
         internalPasteTimerRef.current = window.setTimeout(() => {
           internalPasteTimerRef.current = null;
+          const lastExternalPaste = lastExternalMediaPasteRef.current;
+          if (lastExternalPaste && Date.now() - lastExternalPaste.at < EXTERNAL_MEDIA_PASTE_DEDUPE_MS) return;
           handlePaste(false);
-        }, 0);
+        }, INTERNAL_NODE_PASTE_DELAY_MS);
       } else if (ctrl && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         handleDuplicate();

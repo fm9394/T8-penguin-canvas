@@ -206,6 +206,97 @@ html[data-theme-visual] .t8-canvas-shell .t8-control-rail .react-flow__controls,
   box-shadow: none !important;
 }
 
+/* === 科技风浅色 legacy node adapter ===
+   早期节点里仍有硬编码的深色 Tailwind class / inline background。
+   科技风浅色也必须像官方强风格主题一样统一兜底，否则会出现部分节点仍是黑卡片。 */
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) > div:first-child {
+  background: var(--t8-bg-node) !important;
+  color: var(--t8-text-main) !important;
+  border-color: var(--t8-border) !important;
+  box-shadow: var(--t8-shadow-panel) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="border-b"] {
+  border-color: var(--t8-border) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class~="text-white"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/80"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/90"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-zinc-100"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-zinc-200"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-neutral-100"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-slate-100"] {
+  color: var(--t8-text-main) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/60"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/70"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-zinc-300"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-zinc-400"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-neutral-300"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-slate-300"] {
+  color: var(--t8-text-muted) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/20"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/30"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/40"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-white/50"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-zinc-500"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-neutral-400"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-slate-400"] {
+  color: var(--t8-text-dim) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-cyan-"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-sky-"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-blue-"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-emerald-"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-green-"] {
+  color: var(--t8-accent-hover) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-amber-"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="text-yellow-"] {
+  color: var(--t8-warning) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="bg-white/5"]:not(input):not(textarea):not(select),
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="bg-white/10"]:not(input):not(textarea):not(select),
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="bg-zinc-900"]:not(input):not(textarea):not(select):not(img):not(video):not(canvas),
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="bg-zinc-950"]:not(input):not(textarea):not(select):not(img):not(video):not(canvas),
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="bg-neutral-900"]:not(input):not(textarea):not(select):not(img):not(video):not(canvas),
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="bg-slate-900"]:not(input):not(textarea):not(select):not(img):not(video):not(canvas),
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="bg-black/"]:not(input):not(textarea):not(select):not(img):not(video):not(canvas) {
+  background-color: var(--t8-bg-panel-muted) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="border-white/"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="border-cyan-"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="border-sky-"],
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) [class*="border-blue-"] {
+  border-color: var(--t8-border-strong) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) input,
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) select,
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) textarea {
+  background: color-mix(in srgb, var(--t8-bg-panel) 92%, var(--t8-accent) 3%) !important;
+  border-color: var(--t8-border) !important;
+  color: var(--t8-text-main) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) input::placeholder,
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) textarea::placeholder {
+  color: var(--t8-text-dim) !important;
+}
+
+html[data-theme-visual="tech"][data-theme-mode="light"] .react-flow__node:not(.react-flow__node-groupBox) option {
+  background: var(--t8-bg-panel) !important;
+  color: var(--t8-text-main) !important;
+}
+
 /* 隐藏滚动条 */
 .scrollbar-hide::-webkit-scrollbar {
   display: none;

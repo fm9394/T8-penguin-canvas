@@ -476,6 +476,9 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
       className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm ${
         isPixel ? 'px-modal-mask' : 'bg-black/60'
       }`}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
     >
       <div
         className={

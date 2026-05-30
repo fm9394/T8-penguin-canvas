@@ -1,7 +1,7 @@
 {
   "$schema": "本文件为 T8-penguin-canvas 节点清单防丢失锁,任何节点删减都需要在 roadmap.md 中说明并更新本文件。",
-  "version": "1.7.0",
-  "lastUpdated": "2026-05-30-v1.7.0-pose-master-openpose-coco-and-fal-models",
+  "version": "1.7.1",
+  "lastUpdated": "2026-05-30-v1.7.1-tech-light-legacy-adapter-and-interaction-hotfixes",
   "packaging": {
     "description": "Electron NSIS 桌面端打包链路(v1.2.1 起标准化, 严禁未明确指令主动打包)。完整产物拓扑: app.asar(electron/{main,loader,preload}.cjs + node_modules) + app.asar.unpacked(node_modules/sharp + @img) + resources/backend-enc/*.t8c(extraResources, asar 外) + resources/frontend(extraResources, asar 外)。前端版本号由 vite define 注入 __APP_VERSION__、Sidebar 左下角自动同步。",
     "scripts": {
@@ -16,9 +16,9 @@
       "T8PC_FRONTEND_DIST": "打包模式 = path.join(process.resourcesPath, 'frontend'); 开发模式 = <project>/dist",
       "T8PC_RES": "打包模式 = process.resourcesPath; 开发模式 = <project>"
     },
-    "version": "1.7.0",
-    "semverVersion": "1.7.0",
-    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；当前源码为 v1.7.0：图像节点新增 Grok Image TAB，视频节点新增 Sora2 FAL TAB，并把 Grok Video FAL 扩展为图生视频 / 参考生视频两种模式，参考图默认 base64 传入；姿势大师新增线稿 / OpenPose / COCO 三种预览与运行输出模式，保留 OpenPose/COCO JSON 导出，同时加宽多人姿势画布、补清空画布、修复最后一个人物删除无效，并新增抓取模式移动整个人物主体。本次未重新打包 Electron。",
+    "version": "1.7.1",
+    "semverVersion": "1.7.1",
+    "versionNote": "v1.3.0 起统一采用 semver 三段阶段号 x.y.z；当前源码为 v1.7.1：科技风浅色模式新增 legacy node adapter，统一兜底老节点里的 text-white/bg-zinc/bg-white 等暗色工具类，修复图像、文本等节点在经典科技白天模式残留黑卡片或文字不可读的问题；顶部栏推广 / 资源库 / 设置 / 主题浮层支持点击画布空白处关闭；Ctrl+V 媒体粘贴增加原生 paste 与快捷键去重；LLM/Vision 新增 gemini-3.5-flash 模型。本次未重新打包 Electron。",
     "installer": "本次未打包 Electron；最近一次安装包为 dist_electron/T8-PenguinCanvas-Setup-1.5.5.exe (NSIS, 108.96 MB)",
     "checklist": [
       "运行 npm run encrypt 前确认已 npm install bytenode 且使用 Electron 内置 Node",
@@ -67,6 +67,7 @@
         "小型纯图标按钮必须使用 t8-mini-icon-button 或等价固定尺寸类，不能直接复用大号胶囊 t8-btn/px-btn，否则 OP、像素糖果等强风格主题会把按钮撑大变形",
         "本地保存、资源库、主题模板等默认路径必须由 backend/src/config.js 统一按平台计算，前端不得再次硬编码 D:\\zhenzhen；非 Windows 旧默认值由 settings 路由迁移，用户自定义路径不得覆盖",
         "官方主题浅色模式必须检查并覆盖老节点内部暗色工具类，如 text-white/*、bg-white/*、border-white/*、cyan/violet 标签和状态色，避免只改外壳导致字段、参数或实际发送文字不可读",
+        "默认科技风浅色模式同样必须保留 legacy node adapter；新增节点若使用 text-white/bg-zinc/bg-white 等暗色工具类或 inline 深色背景，必须同步接入主题变量或在 adapter 中兜底，避免经典白天模式残留黑卡片",
         "主题风格化元素使用 visuals.style / iconPack / canvasPattern / nodeFrame / headerMark 表达，避免把某个 IP 或图案写死在业务组件里",
         "自定义模板导入时必须通过 validateTheme/后端 normalizeTemplate，过滤未知枚举、过长字段和非法音乐 URL",
         "ThemeMusicToggle 与 ReactFlow Controls 必须同置于 .t8-control-rail，由全局变量统一定位和堆叠；主题 CSS 只能覆盖尺寸、颜色和视觉样式，不得分别硬编码 left/top/bottom 造成喇叭与缩放条漂移",
@@ -101,7 +102,7 @@
     "styles": {
       "tech": {
         "label": "科技风",
-        "description": "玻璃拟态、细边框、冷色发光、circuit 画布纹理，内置默认音乐 One Summer's Day",
+        "description": "玻璃拟态、细边框、冷色发光、circuit 画布纹理，内置默认音乐 One Summer's Day；v1.7.1 起科技风浅色模式内置 legacy node adapter，统一修正旧节点暗色工具类残留",
         "default": false
       },
       "pixel": {
@@ -1456,6 +1457,16 @@
         "姿势大师新增线稿图 / OpenPose图 / COCO图三种可见预览与运行输出模式；OpenPose/COCO JSON 导出仍作为独立 keypoints 复用入口保留。",
         "姿势大师横向画布扩展为多人构图更友好的宽画布，并通过 pointVersion 兼容旧姿势；新增清空按钮、修复最后一个人物无法删除、增加抓取模式，用户可直接拖动整个人物主体。"
       ]
+    },
+    "phase98": {
+      "label": "科技风浅色主题一致性与交互热修 (v1.7.1)",
+      "status": "complete",
+      "items": [
+        "科技风浅色模式新增 legacy node adapter，统一覆盖老节点内部 text-white、bg-zinc/bg-neutral/bg-black、bg-white/5、border-white/cyan/blue、暗色输入框与 placeholder 等硬编码样式，修复经典白天模式下图像 / 文本 / 旧生成节点仍显示黑卡片或浅字的问题。",
+        "顶部栏推广入口、资源库抽屉、设置弹窗和主题模板弹窗支持点击画布空白处关闭，保留充值弹窗既有交互，减少必须二次点击图标关闭的割裂感。",
+        "画布 Ctrl+V 媒体粘贴增加快捷键与原生 paste 事件去重，避免复制截图或文件时同一批素材被创建两次，同时保留节点内部复制粘贴逻辑。",
+        "LLM/Vision 模型列表新增 gemini-3.5-flash，默认模型和其他 LLM 链路保持不变。"
+      ]
     }
   },
   "categories": {
@@ -1512,7 +1523,7 @@
         {
           "type": "llm",
           "label": "LLM/Vision 节点",
-          "description": "完全对齐 gpt-image-2-web chat:5 模型(gemini-3.1-flash-lite 默认/gpt-4o/gemini-3.1-pro/gpt-5/gpt-image-2-all) + temp/max_tokens + system 预设 + 多模态图片 + 多轮会话 + SSE 流式 + 独立 LLM Key"
+          "description": "LLM/Vision 模型(gemini-3.1-flash-lite 默认/gemini-3.5-flash/gpt-4o/gemini-3.1-pro/gpt-5/gpt-image-2-all) + temp/max_tokens + system 预设 + 多模态图片 + 多轮会话 + SSE 流式 + 独立 LLM Key"
         }
       ]
     },
@@ -1917,6 +1928,14 @@
       {
         "id": "gemini-3.1-flash-lite-preview",
         "label": "Gemini 3.1 Flash Lite (默认)",
+        "provider": "llm-direct",
+        "endpoint": "/v1/chat/completions",
+        "vision": true,
+        "stream": true
+      },
+      {
+        "id": "gemini-3.5-flash",
+        "label": "Gemini 3.5 Flash",
         "provider": "llm-direct",
         "endpoint": "/v1/chat/completions",
         "vision": true,
