@@ -21,7 +21,7 @@ import {
   type EdgeChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Play, Copy, CopyPlus, Trash2, FolderPlus, PackagePlus, Library, Download, Send as SendIcon } from 'lucide-react';
+import { Play, Copy, CopyPlus, Trash2, FolderPlus, PackagePlus, Library, Download, Workflow, Send as SendIcon } from 'lucide-react';
 import * as LucideIcons from 'lucide-react';
 import { useCanvasStore } from '../stores/canvas';
 import { useThemeStore } from '../stores/theme';
@@ -58,6 +58,7 @@ import {
   type InstantiatedSendNodeFragment,
   type SendNodeFragment,
 } from '../utils/sendNodeFragment';
+import { createWorkflowResourceManifest } from '../utils/workflowResource';
 import {
   assignFreshNodeSerials,
   findNodeBySerialId,
@@ -75,6 +76,7 @@ import {
   type MaterialSetItem,
   type MaterialSetKind,
 } from '../utils/materialSet';
+import { chooseDefaultSendMode, resolveEffectiveSendMode } from '../utils/sendMode';
 import * as api from '../services/api';
 import { logBus } from '../stores/logs';
 import CanvasToolbar from './CanvasToolbar';
@@ -703,6 +705,13 @@ export interface AddNodeOptions {
 
 export type AddNodeFn = (type: NodeType, options?: AddNodeOptions) => void;
 
+export interface InsertWorkflowOptions {
+  atScreen?: { x: number; y: number };
+  title?: string;
+}
+
+export type InsertWorkflowFn = (fragment: SendNodeFragment, options?: InsertWorkflowOptions) => void;
+
 const MEDIA_EXTENSIONS: Record<MediaKind, string[]> = {
   image: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'avif'],
   video: ['mp4', 'webm', 'mov', 'm4v', 'mkv'],
@@ -857,9 +866,10 @@ function getReactFlowHandleInfo(target: EventTarget | null): {
 
 interface CanvasInnerProps {
   onAddNodeRef?: React.MutableRefObject<AddNodeFn | null>;
+  onInsertWorkflowRef?: React.MutableRefObject<InsertWorkflowFn | null>;
 }
 
-function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
+function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
   const { activeId, canvases, loadCanvases, setActive } = useCanvasStore();
   const { theme, style, templateId, customTemplates } = useThemeStore();
   const currentTemplate = useMemo(
@@ -1511,17 +1521,6 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     [downloadMaterialItem, getDownloadableItemsFromNodes],
   );
 
-  const inferSendModeFromNodes = useCallback((selectedNodes: Node[]): SendTargetMode => {
-    if (selectedNodes.length === 1) {
-      const type = String(selectedNodes[0].type || '');
-      if (type === 'portrait-master') return 'portrait-master';
-      if (type === 'material-set') return 'material-set';
-      if (type === 'upload') return 'upload';
-      if (type === 'output') return 'output';
-    }
-    return 'material-set';
-  }, []);
-
   const openSendMaterials = useCallback(
     (ids: string[], atScreen?: { x: number; y: number }) => {
       const selectedNodes = nodesRef.current.filter((node) => ids.includes(node.id) && node.id !== BULK_PHANTOM_ID);
@@ -1531,12 +1530,12 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         logBus.warn('所选内容没有可发送的节点或素材', '发送');
         return;
       }
-      const defaultMode =
-        nodeFragment.nodes.length > 1 && nodeFragment.edges.length > 0
-          ? 'node-fragment'
-          : materials.length > 0
-            ? inferSendModeFromNodes(selectedNodes)
-            : 'node-fragment';
+      const defaultMode = chooseDefaultSendMode({
+        selectedNodeTypes: selectedNodes.map((node) => String(node.type || '')),
+        nodeCount: nodeFragment.nodes.length,
+        edgeCount: nodeFragment.edges.length,
+        materialCount: materials.length,
+      });
       setSendModal({
         materials,
         nodeFragment,
@@ -1545,15 +1544,18 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
         atScreen,
       });
     },
-    [activeId, inferSendModeFromNodes],
+    [activeId],
   );
 
   const resolveSendMode = useCallback((mode: SendTargetMode): SendTargetMode => {
-    if (mode !== 'auto') return mode;
-    if (sendModal?.defaultMode && sendModal.defaultMode !== 'auto') return sendModal.defaultMode;
-    if (sendModal?.nodeFragment?.nodes.length && sendModal.materials.length === 0) return 'node-fragment';
-    return 'material-set';
-  }, [sendModal?.defaultMode, sendModal?.materials.length, sendModal?.nodeFragment?.nodes.length]);
+    return resolveEffectiveSendMode({
+      requestedMode: mode,
+      defaultMode: sendModal?.defaultMode || 'auto',
+      nodeCount: sendModal?.nodeFragment?.nodes.length || 0,
+      edgeCount: sendModal?.nodeFragment?.edges.length || 0,
+      materialCount: sendModal?.materials.length || 0,
+    });
+  }, [sendModal?.defaultMode, sendModal?.materials.length, sendModal?.nodeFragment?.edges.length, sendModal?.nodeFragment?.nodes.length]);
 
   const basePositionForActiveSend = useCallback(() => {
     const atScreen = sendModal?.atScreen;
@@ -1563,9 +1565,40 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     return screenToFlowPosition(
       rect
         ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
-        : { x: window.innerWidth / 2, y: window.innerHeight / 2 },
+      : { x: window.innerWidth / 2, y: window.innerHeight / 2 },
     );
   }, [screenToFlowPosition, sendModal?.atScreen]);
+
+  const insertWorkflowFragment = useCallback(
+    (fragment: SendNodeFragment, options: InsertWorkflowOptions = {}) => {
+      if (!fragment?.nodes?.length) {
+        logBus.warn('工作流资源没有可插入节点', '资源库');
+        return;
+      }
+      const base = options.atScreen ? screenToFlowPosition(options.atScreen) : basePositionForActiveSend();
+      const placedInstance = placeInstantiatedNodeFragment(
+        instantiateSendNodeFragment(fragment, nodesRef.current, base),
+        nodesRef.current,
+      );
+      const instance = {
+        ...placedInstance,
+        nodes: assignActiveNodeSerials(placedInstance.nodes, nodesRef.current),
+      };
+      const focusCenter = centerOfMaterialNodes(instance.nodes);
+      if (activeId && focusCenter) {
+        const { zoom } = getViewport();
+        pendingSendFocusRef.current = {
+          canvasId: activeId,
+          center: focusCenter,
+          zoom: Math.min(Math.max(zoom || 0.9, 0.72), 1.05),
+        };
+      }
+      setEdges([...edgesRef.current.map((edge) => ({ ...edge, selected: false })), ...instance.edges]);
+      setNodes([...nodesRef.current.map((node) => ({ ...node, selected: false })), ...instance.nodes]);
+      logBus.success(`已插入 ${options.title || summarizeSendNodeFragment(fragment)}`, '资源库');
+    },
+    [activeId, assignActiveNodeSerials, basePositionForActiveSend, getViewport, screenToFlowPosition],
+  );
 
   const handleSendMaterialsToCanvas = useCallback(
     async (targetCanvasId: string, mode: SendTargetMode, switchAfter: boolean) => {
@@ -1735,8 +1768,46 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     [activeId, assignActiveNodeSerials, basePositionForActiveSend, getViewport, loadCanvases, resolveSendMode, sendModal, setActive],
   );
 
-  const handleSaveSendMaterialsToResource = useCallback(async () => {
-    if (!sendModal || sendModal.materials.length === 0) return;
+  const saveWorkflowFragmentToResource = useCallback(
+    async (fragment: SendNodeFragment | undefined, defaultTitle = '未命名工作流') => {
+      if (!fragment?.nodes?.length) {
+        logBus.warn('至少选择 1 个节点才能保存工作流', '资源库');
+        return false;
+      }
+      const title = window.prompt('工作流名称', defaultTitle);
+      if (!title?.trim()) return false;
+      try {
+        const manifest = createWorkflowResourceManifest(fragment, { title: title.trim() });
+        const result = await api.addResourceWorkflow({
+          workflowFragment: manifest,
+          title: manifest.title,
+          tags: ['工作流'],
+          sourceCanvasId: activeId || fragment.sourceCanvasId,
+        });
+        if (!result.success) throw new Error(result.error || '保存工作流失败');
+        window.dispatchEvent(new CustomEvent('penguin:resources-changed'));
+        const duplicate = Boolean((result as any).duplicate || (result.data as any)?.duplicate);
+        logBus.success(duplicate ? `资源库已有相同工作流：${manifest.title}` : `已保存工作流：${manifest.title}`, '资源库');
+        return true;
+      } catch (e: any) {
+        logBus.warn(e?.message || '保存工作流失败', '资源库');
+        return false;
+      }
+    },
+    [activeId],
+  );
+
+  const handleSaveSendMaterialsToResource = useCallback(async (mode?: SendTargetMode) => {
+    if (!sendModal) return;
+    const effectiveMode = resolveSendMode(mode || sendModal.defaultMode || 'auto');
+    if (effectiveMode === 'node-fragment') {
+      const fallbackTitle = sendModal.nodeFragment?.nodes.length
+        ? `${sendModal.nodeFragment.nodes.length}节点工作流`
+        : '未命名工作流';
+      await saveWorkflowFragmentToResource(sendModal.nodeFragment, fallbackTitle);
+      return;
+    }
+    if (sendModal.materials.length === 0) return;
     const buckets = bucketSendableMaterials(sendModal.materials);
     let saved = 0;
     const failures: string[] = [];
@@ -1770,7 +1841,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
     window.dispatchEvent(new CustomEvent('penguin:resources-changed'));
     if (saved > 0) logBus.success(`已保存 ${saved} 项到资源库`, '发送素材');
     if (failures.length > 0) logBus.warn(failures.slice(0, 2).join('；'), '发送素材');
-  }, [activeId, sendModal]);
+  }, [activeId, resolveSendMode, saveWorkflowFragmentToResource, sendModal]);
 
   const handleSendMaterialsToEagle = useCallback(async () => {
     if (!sendModal || sendModal.materials.length === 0) return;
@@ -2559,6 +2630,15 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
       if (onAddNodeRef) onAddNodeRef.current = null;
     };
   }, [onAddNodeRef, addNode]);
+
+  useEffect(() => {
+    if (onInsertWorkflowRef) {
+      onInsertWorkflowRef.current = insertWorkflowFragment;
+    }
+    return () => {
+      if (onInsertWorkflowRef) onInsertWorkflowRef.current = null;
+    };
+  }, [onInsertWorkflowRef, insertWorkflowFragment]);
 
   // xyflow 事件
   const onNodesChange = useCallback(
@@ -4720,6 +4800,21 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
               )}
               <button
                 className={menuItemCls}
+                disabled={sendNodeCount === 0}
+                title={sendNodeCount > 0 ? '保存选中节点与内部连线为资源库工作流' : '请选择至少 1 个节点'}
+                onClick={() => {
+                  closeContextMenu();
+                  void saveWorkflowFragmentToResource(
+                    nodeFragmentPreview,
+                    sendEdgeCount > 0 ? `${sendNodeCount}节点${sendEdgeCount}线工作流` : `${sendNodeCount}节点工作流`,
+                  );
+                }}
+              >
+                <Workflow size={13} />
+                <span>保存工作流到资源库</span>
+              </button>
+              <button
+                className={menuItemCls}
                 disabled={!canSendSelection}
                 title={
                   canSendSelection
@@ -4849,6 +4944,7 @@ function CanvasInner({ onAddNodeRef }: CanvasInnerProps) {
 
 interface CanvasProps {
   onAddNodeRef?: React.MutableRefObject<AddNodeFn | null>;
+  onInsertWorkflowRef?: React.MutableRefObject<InsertWorkflowFn | null>;
 }
 
 export default function Canvas(props: CanvasProps) {

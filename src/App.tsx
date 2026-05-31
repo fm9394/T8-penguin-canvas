@@ -3,7 +3,7 @@ import { Moon, Settings, Sun, Wifi, WifiOff, Sparkles, Cloud, ExternalLink, Copy
 import { useThemeStore } from './stores/theme';
 import { useApiKeysStore } from './stores/apiKeys';
 import Sidebar from './components/Sidebar';
-import Canvas, { type AddNodeFn } from './components/Canvas';
+import Canvas, { type AddNodeFn, type InsertWorkflowFn } from './components/Canvas';
 import ApiSettingsModal from './components/ApiSettings';
 import RechargeModal from './components/RechargeModal';
 import ResourceLibraryDrawer from './components/ResourceLibraryDrawer';
@@ -17,6 +17,7 @@ import type { ResourceItem } from './services/api';
 import { applyThemeTemplate } from './theme/applyTheme';
 import { resolveThemeTemplate } from './theme/defaultTemplates';
 import { materialSetItemsToData, type MaterialSetKind, type MaterialSetItem } from './utils/materialSet';
+import { workflowManifestToFragment } from './utils/workflowResource';
 import {
   buildPortraitPrompt,
   normalizePortraitLocks,
@@ -140,6 +141,13 @@ async function poseResourceToNodeData(item: ResourceItem): Promise<Record<string
   return poseBackupToNodeData(await res.json());
 }
 
+async function workflowResourceToFragment(item: ResourceItem) {
+  if (item.kind !== 'workflow' || !item.fileUrl) return null;
+  const res = await fetch(item.fileUrl);
+  if (!res.ok) throw new Error(`读取工作流资源失败: HTTP ${res.status}`);
+  return workflowManifestToFragment(await res.json());
+}
+
 /**
  * T8-penguin-canvas 应用根组件 (Phase 1)
  * 布局: [侧边栏(画布管理 + 节点列表)] [画布主体] + 头部状态栏
@@ -174,6 +182,7 @@ function App() {
   const aixWrapRef = useRef<HTMLDivElement>(null);
   // 画布接收节点添加的 ref(从 Sidebar -> Canvas)
   const addNodeRef = useRef<AddNodeFn | null>(null);
+  const insertWorkflowRef = useRef<InsertWorkflowFn | null>(null);
 
   // 「在线画布」浮层: 点击容器外部 / 按 ESC 自动关闭
   useEffect(() => {
@@ -413,6 +422,13 @@ function App() {
       const poseData = await poseResourceToNodeData(item);
       if (!poseData) throw new Error('姿势资源格式无效');
       addNodeRef.current?.('pose-master', { data: poseData });
+      void api.updateResourceItem(item.id, { touch: true });
+      return;
+    }
+    if (item.kind === 'workflow') {
+      const fragment = await workflowResourceToFragment(item);
+      if (!fragment) throw new Error('工作流资源格式无效');
+      insertWorkflowRef.current?.(fragment, { title: item.title || '工作流' });
       void api.updateResourceItem(item.id, { touch: true });
       return;
     }
@@ -1298,7 +1314,7 @@ function App() {
       <div className="flex-1 flex overflow-hidden">
         <Sidebar onAddNode={handleAddNode} />
         <ErrorBoundary fallbackTitle="画布渲染出错了，已被错误边界捕获">
-          <Canvas onAddNodeRef={addNodeRef} />
+          <Canvas onAddNodeRef={addNodeRef} onInsertWorkflowRef={insertWorkflowRef} />
         </ErrorBoundary>
       </div>
 

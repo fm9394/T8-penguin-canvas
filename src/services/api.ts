@@ -289,7 +289,7 @@ export function importRHToolsBackup(payload: RHToolsBackup, mode: 'replace' | 'm
 }
 
 // ========== 资源库 (v1.3.4) ==========
-export type ResourceKind = 'image' | 'video' | 'audio' | 'set' | 'pose';
+export type ResourceKind = 'image' | 'video' | 'audio' | 'set' | 'pose' | 'workflow';
 export type ResourceMediaKind = 'image' | 'video' | 'audio';
 export type ResourceMaterialSetKind = 'text' | 'image' | 'video' | 'audio';
 
@@ -328,6 +328,14 @@ export interface ResourceItem {
     size?: number;
     mime?: string;
   }>;
+  workflowNodeCount?: number;
+  workflowEdgeCount?: number;
+  workflowNodeTypes?: string[];
+  workflowPreview?: {
+    nodes: Array<{ id: string; type: string; label: string; x: number; y: number }>;
+    edges: Array<{ source: string; target: string }>;
+  };
+  workflowFragment?: Record<string, any>;
   createdAt: number;
   updatedAt: number;
   lastUsedAt?: number;
@@ -365,6 +373,16 @@ export interface AddResourcePayload {
 
 export interface AddResourcePosePayload {
   poseBackup: Record<string, any>;
+  categoryId?: string;
+  title?: string;
+  tags?: string[];
+  sourceNodeId?: string;
+  sourceCanvasId?: string;
+  favorite?: boolean;
+}
+
+export interface AddResourceWorkflowPayload {
+  workflowFragment: Record<string, any>;
   categoryId?: string;
   title?: string;
   tags?: string[];
@@ -429,6 +447,13 @@ export function addResourceSet(payload: AddResourceSetPayload) {
 
 export function addResourcePose(payload: AddResourcePosePayload) {
   return safeRequest<ResourceItem & { duplicate?: boolean }>(`${BASE}/resources/poses/add`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function addResourceWorkflow(payload: AddResourceWorkflowPayload) {
+  return safeRequest<ResourceItem & { duplicate?: boolean }>(`${BASE}/resources/workflows/add`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
