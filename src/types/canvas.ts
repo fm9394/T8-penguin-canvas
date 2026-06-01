@@ -41,6 +41,7 @@ export type NodeType =
   | 'idea'
   | 'bp'
   | 'relay'
+  | 'remove-ai-watermark'
   | 'video-output'
   // Toolbox (5)
   | 'cinematic'

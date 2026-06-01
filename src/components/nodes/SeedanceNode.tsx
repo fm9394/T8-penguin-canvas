@@ -16,6 +16,7 @@ import { useUpstreamMaterials, type Material } from './useUpstreamMaterials';
 import { useOrderedMaterials } from './useOrderedMaterials';
 import MaterialPreviewSection from './MaterialPreviewSection';
 import MentionPromptInput from './MentionPromptInput';
+import LoopingVideo from '../LoopingVideo';
 import { resolveMediaMentions, type MediaMention } from './mediaMentions';
 import { useDragMaterialStore, type MaterialPayload } from '../../stores/dragMaterial';
 import { useMaterialDropTarget } from '../../hooks/useMaterialDropTarget';
@@ -26,6 +27,12 @@ import {
   advancedProvidersForNode,
   resolveAdvancedProviderSelection,
 } from '../../utils/advancedProviders';
+import {
+  countExcludedMaterials,
+  excludeMaterialId,
+  filterExcludedMaterials,
+  normalizeExcludedMaterialIds,
+} from '../../utils/materialExclusion';
 
 /**
  * SeedanceNode — 字节 Seedance 2.0 视频分镜节点
@@ -107,12 +114,44 @@ const SeedanceNode = ({ id, data, selected }: NodeProps) => {
 
   // === 上游素材聚合 (跨节点统一机制) ===
   const upstream = useUpstreamMaterials(id);
+  const excludedMaterialIds = useMemo(
+    () => normalizeExcludedMaterialIds(d?.excludedMaterialIds),
+    [d?.excludedMaterialIds],
+  );
+  const visibleUpstreamTexts = useMemo(
+    () => filterExcludedMaterials(upstream.texts, excludedMaterialIds),
+    [upstream.texts, excludedMaterialIds],
+  );
+  const visibleUpstreamImages = useMemo(
+    () => filterExcludedMaterials(upstream.images, excludedMaterialIds),
+    [upstream.images, excludedMaterialIds],
+  );
+  const visibleUpstreamVideos = useMemo(
+    () => filterExcludedMaterials(upstream.videos, excludedMaterialIds),
+    [upstream.videos, excludedMaterialIds],
+  );
+  const visibleUpstreamAudios = useMemo(
+    () => filterExcludedMaterials(upstream.audios, excludedMaterialIds),
+    [upstream.audios, excludedMaterialIds],
+  );
+  const excludedUpstreamCount = useMemo(
+    () => countExcludedMaterials(excludedMaterialIds, [...upstream.texts, ...upstream.images, ...upstream.videos, ...upstream.audios]),
+    [excludedMaterialIds, upstream.texts, upstream.images, upstream.videos, upstream.audios],
+  );
   const materialOrder: string[] = Array.isArray(d?.materialOrder) ? d.materialOrder : [];
-  const orderedTexts = useOrderedMaterials(upstream.texts, materialOrder);
-  const orderedImages = useOrderedMaterials(upstream.images, materialOrder);
-  const orderedVideos = useOrderedMaterials(upstream.videos, materialOrder);
-  const orderedAudios = useOrderedMaterials(upstream.audios, materialOrder);
+  const orderedTexts = useOrderedMaterials(visibleUpstreamTexts, materialOrder);
+  const orderedImages = useOrderedMaterials(visibleUpstreamImages, materialOrder);
+  const orderedVideos = useOrderedMaterials(visibleUpstreamVideos, materialOrder);
+  const orderedAudios = useOrderedMaterials(visibleUpstreamAudios, materialOrder);
   const setMaterialOrder = (newOrder: string[]) => update({ materialOrder: newOrder });
+  const handleExcludeUpstreamMaterial = (m: Material) => {
+    if (m.origin !== 'upstream') return;
+    update({
+      excludedMaterialIds: excludeMaterialId(excludedMaterialIds, m.id),
+      materialOrder: materialOrder.filter((itemId) => itemId !== m.id),
+    });
+  };
+  const handleRestoreExcludedMaterials = () => update({ excludedMaterialIds: [] });
 
   // === 本地拖入参考素材 (跨节点 Ctrl 拖拽) ===
   const localRefImages: string[] = Array.isArray(d?.localRefImages) ? d.localRefImages : [];
@@ -662,6 +701,9 @@ const SeedanceNode = ({ id, data, selected }: NodeProps) => {
           audios={orderedAudios}
           order={materialOrder}
           onReorder={setMaterialOrder}
+          onExcludeUpstream={handleExcludeUpstreamMaterial}
+          excludedCount={excludedUpstreamCount}
+          onRestoreExcluded={handleRestoreExcludedMaterials}
           selected={!!selected}
           isDark={isDark}
           isPixel={isPixel}
@@ -704,7 +746,7 @@ const SeedanceNode = ({ id, data, selected }: NodeProps) => {
               <div className="space-y-1">
                 {localRefVideos.map((u, i) => (
                   <div key={`v${i}`} className="flex items-center gap-1">
-                    <video
+                    <LoopingVideo
                       src={u}
                       data-drag-source
                       data-drag-kind="video"
@@ -801,7 +843,7 @@ const SeedanceNode = ({ id, data, selected }: NodeProps) => {
 
       {videoUrl && !hasAutoOutput && (
         <div className="border-t border-white/10 p-2">
-          <video
+          <LoopingVideo
             src={videoUrl}
             controls
             className="w-full rounded"

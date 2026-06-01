@@ -1,7 +1,7 @@
 {
   "name": "t8-penguin-canvas",
   "private": false,
-  "version": "1.8.5",
+  "version": "1.9.1",
   "type": "module",
   "main": "electron/main.cjs",
   "description": "T8-penguin-canvas — AI 节点画布工作流工具（Web + Electron 桌面端）",
@@ -115,6 +115,13 @@
       {
         "from": "dist",
         "to": "frontend",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "tools/remove-ai-watermarks-runtime",
+        "to": "tools/remove-ai-watermarks",
         "filter": [
           "**/*"
         ]
