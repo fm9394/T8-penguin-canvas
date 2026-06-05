@@ -67,7 +67,7 @@ My favorite girl Go YounJung
 - 🧾 **文本分割二版**：文本分割节点支持段落 / 行 / 自定义分隔 / Markdown / 序号 / 智能分镜 / 正则高级 / 字数切块；按段落严格以至少一个空行切段，按行才逐行切分，内置模式说明、中文输入稳定编辑、双列预览布局、分段收藏、JSON 导入导出，并一键创建前置文本循环器链路；循环器执行完成后可自动打散为多个文本节点
 - 🖌️ **图层画板节点**（v1.9.0 增强）：工具分类开放画板节点，支持 16:9 / 9:16 等画布比例、空白图层、图层组折叠、可见 / 锁定状态、载入上游或本地图片、手绘 / 文字 / 图形 / 箭头、缩放旋转、套索 / 钢笔非破坏式抠图、放大编辑窗口、导入导出画板 JSON 与运行输出 PNG；放大窗口复用完整图层面板并按设备像素比重绘，避免图片被低清预览二次放大
 - 🔑 **分类独立 API Key 可选 · 默认折叠**（v1.2.6）：gpt-image / nano-banana / mj / veo / grok / seedance / suno 七个分类 Key 未填自动 fallback 贞贞通用 Key，新手默认折叠不被干扰
-- 🧭 **扩展 API 平台高级入口**（v1.9.5 强化）：API 设置页默认折叠的「扩展 API 平台【高级/可选】」可配置 OpenAI 兼容、ModelScope、火山引擎、本地 ComfyUI、即梦 CLI；ModelScope 图像生成新增 LoRA 管理与节点内多选，默认带 Infinite-Canvas 同步的 LoRA 列表，LLM 继续走稳定 `/v1/chat/completions`，火山 / ModelScope 会自动合并默认模型列表，即梦 CLI 支持只返回 submit_id 后继续查询下载图像 / 视频；ComfyUI 字段映射会清理非 fixed 的旧 value，保证 Prompt、上游图片、宽高等运行时输入真正生效
+- 🧭 **扩展 API 平台高级入口**（v1.9.5 强化）：API 设置页默认折叠的「扩展 API 平台【高级/可选】」可配置 OpenAI 兼容、ModelScope、火山引擎、ComfyUI、即梦 CLI；ModelScope 图像生成新增 LoRA 管理与节点内多选，默认带 Infinite-Canvas 同步的 LoRA 列表，LLM 继续走稳定 `/v1/chat/completions`，火山 / ModelScope 会自动合并默认模型列表，即梦 CLI 支持只返回 submit_id 后继续查询下载图像 / 视频；ComfyUI 字段映射会清理非 fixed 的旧 value，保证 Prompt、上游图片、宽高等运行时输入真正生效
 - 🧽 **去AI水印辅助节点**（已适配上游 0.8.9）：桥接 `wiltodelta/remove-ai-watermarks`，支持 Gemini / 豆包 / 即梦等可见水印识别去除、框选擦除（cv2 / LaMA）、来源自适应隐形水印、ControlNet 结构保留、GFPGAN 脸部恢复、AI 元数据检查 / 清理和来源鉴别；开发环境可使用本地 Python 包，用户 Electron 完整包可通过 `tools/remove-ai-watermarks-runtime` sidecar runtime 随包分发
 - 🧲 **智能对齐辅助线 + snap-to-grid**：拖动时检测同列 / 同行 / 居中对齐并弱吸附
 - 📦 **GroupBox 打组**：框选 ≥2 节点一键套色框容器，可拖拽联动、整体执行、12 色调色板
@@ -124,11 +124,34 @@ npm run dev
 | RunningHub API Key | RunningHub 个人工作流 | `https://www.runninghub.cn` |
 | RH 钱包应用 APIKEY | RH 企业级共享 APIKEY（钱包应用专用） | `https://www.runninghub.cn` |
 | 扩展平台 API Key / Token | OpenAI 兼容、ModelScope、火山引擎、即梦 CLI 等高级来源 | 在「扩展 API 平台【高级/可选】」里按平台填写 Base URL / Token / AK/SK / CLI 路径 |
-| 本地 ComfyUI | 本机 ComfyUI 工作流、ComfyUI 超市、ComfyUI 应用制作工具 | 默认 `http://127.0.0.1:8188`，需先启动本机 ComfyUI |
+| ComfyUI | ComfyUI 工作流、ComfyUI 超市、ComfyUI 应用制作工具 | 默认 `http://127.0.0.1:8188`，需先启动 ComfyUI |
 
-传统 Key、扩展平台密钥和本地 ComfyUI 配置都会保存到 `data/settings.json`；前端 GET 接口仅返回 `****xxxx` 脱敏值或可用状态，明文仅供后端代理本地使用，永不泄露。ComfyUI 默认只允许连接本机 `localhost / 127.0.0.1` 服务。
+传统 Key、扩展平台密钥和 ComfyUI 配置都会保存到 `data/settings.json`；前端 GET 接口仅返回 `****xxxx` 脱敏值或可用状态，明文仅供后端代理本地使用，永不泄露。ComfyUI 默认只允许连接本机 `localhost / 127.0.0.1` 服务；如需由后端接入其他允许地址，可在后端运行环境中设置 `T8_COMFYUI_ALLOW_REMOTE=1`。
 
 > **不需要全部配置**：只填需要使用的那一类即可，其它节点会在运行时友好提示「未配置 XXX API Key」。
+
+---
+
+## 🐳 Docker 部署（Web + 后端）
+
+Docker 部署只运行 Web 前端和 Express 后端，不包含 Electron 桌面端。默认对外暴露 `18766` 端口，数据保存在挂载的 `userdata` 目录。
+
+```bash
+docker compose up -d --build
+```
+
+启动后访问：
+
+- Web：<http://127.0.0.1:18766>
+- 健康检查：<http://127.0.0.1:18766/api/status>
+
+如果容器内的后端需要连接非本机 ComfyUI 地址，在 `docker-compose.yml` 中启用：
+
+```yml
+T8_COMFYUI_ALLOW_REMOTE: "1"
+```
+
+注意：Docker 容器里的 `localhost` 指容器自身，不是宿主机。ComfyUI 地址必须从容器网络视角可访问；如需连接宿主机或其他网络中的 ComfyUI，请填写容器能访问到的地址，并只在可信网络中开启远端访问。
 
 ---
 

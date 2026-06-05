@@ -139,6 +139,41 @@ test('normalizeAdvancedProviders filters invalid providers and clamps unsafe fie
   assert.equal(providers.some((item: any) => item.id === 'remote-comfy'), false);
 });
 
+test('normalizeAdvancedProviders keeps remote ComfyUI settings when backend remote access is enabled', () => {
+  const previousRemote = process.env.T8_COMFYUI_ALLOW_REMOTE;
+  process.env.T8_COMFYUI_ALLOW_REMOTE = '1';
+  try {
+    const providers = normalizeAdvancedProviders([
+      {
+        id: 'comfyui-remote',
+        label: 'Remote ComfyUI',
+        protocol: 'comfyui',
+        enabled: true,
+        baseUrl: 'https://comfyui.example.test:8188/',
+        comfyuiConfig: {
+          instances: [
+            'https://comfyui.example.test:8188/',
+            'http://127.0.0.1:8188',
+            'ftp://not-allowed',
+          ],
+        },
+      },
+    ]);
+
+    const provider = providers.find((item: any) => item.id === 'comfyui-remote');
+
+    assert.ok(provider);
+    assert.equal(provider.baseUrl, 'https://comfyui.example.test:8188');
+    assert.deepEqual(provider.comfyuiConfig?.instances, [
+      'https://comfyui.example.test:8188',
+      'http://127.0.0.1:8188',
+    ]);
+  } finally {
+    if (previousRemote === undefined) delete process.env.T8_COMFYUI_ALLOW_REMOTE;
+    else process.env.T8_COMFYUI_ALLOW_REMOTE = previousRemote;
+  }
+});
+
 test('normalizeAdvancedProviders preserves stored secrets when incoming values are blank or masked', () => {
   const current = normalizeAdvancedProviders([
     {

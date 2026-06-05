@@ -85,7 +85,7 @@ const ADVANCED_PROVIDER_LABELS: Record<AdvancedProviderProtocol, string> = {
   'openai-compatible': 'OpenAI 兼容',
   modelscope: 'ModelScope',
   volcengine: '火山引擎',
-  comfyui: '本地 ComfyUI',
+  comfyui: 'ComfyUI',
   'jimeng-cli': '即梦 CLI',
 };
 
@@ -126,10 +126,10 @@ const ADVANCED_PROVIDER_GUIDES: Record<AdvancedProviderProtocol, {
     keyLabel: '火山 API Key',
   },
   comfyui: {
-    subtitle: '接入本机 ComfyUI 工作流',
-    description: '适合把本机 ComfyUI 的 API Workflow 接到图像节点。为安全起见这里只允许本机地址。',
+    subtitle: '接入 ComfyUI 工作流',
+    description: '默认适合把本机 ComfyUI 的 API Workflow 接到图像节点；后端启用远端访问后，也可接入其他允许的 ComfyUI 地址。',
     nodeScopes: ['图像节点'],
-    connectionHint: '实例地址填本机 ComfyUI，例如 http://127.0.0.1:8188。多个实例可一行一个。',
+    connectionHint: '默认填写本机 ComfyUI，例如 http://127.0.0.1:8188；后端启用远端访问后，可填写其他允许地址。多个实例可一行一个。',
     modelHint: '图像节点里选择的是工作流 ID/名称，不需要填写模型列表。',
     baseUrlPlaceholder: 'http://127.0.0.1:8188',
   },
@@ -2160,7 +2160,7 @@ export default function ApiSettingsModal({ open, onClose }: ApiSettingsModalProp
             {advancedOpen && (
               <div className="mt-3 space-y-3">
                 <div className={`text-[11px] leading-relaxed ${hintCls}`}>
-                  这里不是必填项。它只用于 ModelScope、火山引擎、本地 ComfyUI、即梦 CLI 和 OpenAI 兼容接口；平台开启后，还需要在具体节点的“高级来源”里选择它才会生效。
+                  这里不是必填项。它只用于 ModelScope、火山引擎、ComfyUI、即梦 CLI 和 OpenAI 兼容接口；平台开启后，还需要在具体节点的“高级来源”里选择它才会生效。
                   当前状态：已启用 {advancedSummary.enabledCount} 个，已配置密钥 {advancedSummary.configuredKeyCount} 个，ComfyUI {advancedSummary.comfyuiConfigured ? '已填写地址' : '未填写地址'}，即梦 CLI {advancedSummary.jimengConfigured ? '已填写路径' : '未填写路径'}。
                 </div>
                 {advancedProvidersInput.length === 0 ? (

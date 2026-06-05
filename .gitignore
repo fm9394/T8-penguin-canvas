@@ -89,6 +89,7 @@ data/
 input/
 output/
 thumbnails/
+userdata/
 backend/data/
 **/recharge.private.json
 

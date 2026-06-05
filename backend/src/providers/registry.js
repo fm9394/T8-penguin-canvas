@@ -1,5 +1,6 @@
 const DEFAULT_MODELSCOPE_BASE_URL = 'https://api-inference.modelscope.cn/v1';
 const DEFAULT_VOLCENGINE_BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
+const { isAllowedComfyuiUrl } = require('./comfyuiAccess');
 
 const DEFAULT_MODELSCOPE_IMAGE_MODELS = [
   'Tongyi-MAI/Z-Image-Turbo',
@@ -122,7 +123,7 @@ const DEFAULT_ADVANCED_PROVIDERS = [
   },
   {
     id: 'comfyui',
-    label: '本地 ComfyUI',
+    label: 'ComfyUI',
     protocol: 'comfyui',
     baseUrl: 'http://127.0.0.1:8188',
     enabled: false,
@@ -264,17 +265,6 @@ function normalizeUrl(value) {
   return text;
 }
 
-function isLocalUrl(url) {
-  if (!url) return true;
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.toLowerCase();
-    return host === 'localhost' || host === '127.0.0.1' || host === '::1';
-  } catch {
-    return false;
-  }
-}
-
 function normalizeBoolean(value, fallback = false) {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'string') {
@@ -353,13 +343,13 @@ function normalizeVolcengineConfig(value, previous = {}) {
   };
 }
 
-function normalizeComfyuiConfig(value) {
+function normalizeComfyuiConfig(value, options = {}) {
   const raw = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
   const instances = [];
   const rawInstances = Array.isArray(raw.instances) ? raw.instances : [];
   for (const item of rawInstances) {
     const url = normalizeUrl(item);
-    if (url && isLocalUrl(url) && !instances.includes(url)) instances.push(url);
+    if (url && isAllowedComfyuiUrl(url, options) && !instances.includes(url)) instances.push(url);
   }
   const workflows = Array.isArray(raw.workflows)
     ? raw.workflows
@@ -407,7 +397,7 @@ function normalizeProvider(raw, previous = null) {
   if (protocol === 'jimeng-cli') baseUrl = '';
   if (protocol === 'comfyui') {
     if (!baseUrl) baseUrl = 'http://127.0.0.1:8188';
-    if (!isLocalUrl(baseUrl) && !normalizeBoolean(raw.allowRemote, false)) return null;
+    if (!isAllowedComfyuiUrl(baseUrl, { allowRemote: normalizeBoolean(raw.allowRemote, false) })) return null;
   } else if (baseUrl && !normalizeUrl(baseUrl)) {
     return null;
   }
@@ -424,6 +414,10 @@ function normalizeProvider(raw, previous = null) {
     chatModels: normalizeModelList(raw.chatModels || raw.chat_models),
     defaults: normalizePlainObject(raw.defaults),
   };
+
+  if (protocol === 'comfyui' && normalizeBoolean(raw.allowRemote, false)) {
+    provider.allowRemote = true;
+  }
 
   if (id === 'modelscope' && protocol === 'modelscope') {
     provider.imageModels = mergeModelLists(DEFAULT_MODELSCOPE_IMAGE_MODELS, provider.imageModels);
@@ -452,7 +446,9 @@ function normalizeProvider(raw, previous = null) {
     provider.volcengineConfig = normalizeVolcengineConfig(raw.volcengineConfig || raw.volcengine_config, previousConfig.volcengineConfig);
   }
   if (protocol === 'comfyui') {
-    provider.comfyuiConfig = normalizeComfyuiConfig(raw.comfyuiConfig || raw.comfyui_config);
+    provider.comfyuiConfig = normalizeComfyuiConfig(raw.comfyuiConfig || raw.comfyui_config, {
+      allowRemote: normalizeBoolean(raw.allowRemote, false),
+    });
   }
   if (protocol === 'jimeng-cli') {
     provider.jimengConfig = normalizeJimengConfig(raw.jimengConfig || raw.jimeng_config);
