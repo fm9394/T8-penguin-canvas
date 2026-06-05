@@ -14,7 +14,7 @@ services:
       T8PC_FRONTEND_DIST: /app/dist
       T8PC_USER_DATA: /app/userdata
       HOME: /app/userdata
-      # Enable only when this backend should connect to non-local ComfyUI URLs.
-      # T8_COMFYUI_ALLOW_REMOTE: "1"
+      # Docker deployments commonly connect to ComfyUI on another host or container.
+      T8_COMFYUI_ALLOW_REMOTE: "1"
     volumes:
       - ./userdata:/app/userdata

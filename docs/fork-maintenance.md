@@ -4,7 +4,7 @@ This document records the intentional fork-level changes for remote ComfyUI acce
 
 ## Maintained Features
 
-- Remote ComfyUI access can be enabled by backend environment policy while local-only behavior remains the default.
+- Remote ComfyUI access is controlled by backend environment policy. Non-Docker startup remains local-only by default; the included Docker Compose deployment enables remote access for container-to-host or container-to-container ComfyUI use.
 - Docker deployment runs the Vite-built frontend and Express backend together without Electron.
 
 ## Intentional Change Surface
@@ -15,7 +15,7 @@ This document records the intentional fork-level changes for remote ComfyUI acce
 - `src/components/ApiSettings.tsx`: ComfyUI setting copy reflects optional remote backend access.
 - `Dockerfile`, `.dockerignore`, `docker-compose.yml`: Web/backend container deployment.
 - `README.md`: public usage notes for remote ComfyUI and Docker.
-- `tests/advancedProviders.test.ts`, `tests/comfyuiProvider.test.ts`: focused regression coverage.
+- `tests/advancedProviders.test.ts`, `tests/comfyuiProvider.test.ts`, `tests/externalProvidersRoute.test.ts`, `tests/dockerComposeConfig.test.ts`: focused regression coverage.
 
 ## Upstream Sync Workflow
 
@@ -31,6 +31,7 @@ Run these first after conflicts in provider logic:
 
 ```bash
 node --test tests/advancedProviders.test.ts tests/comfyuiProvider.test.ts
+node --test tests/dockerComposeConfig.test.ts tests/externalProvidersRoute.test.ts
 ```
 
 Run broader checks before pushing:
@@ -51,5 +52,5 @@ docker compose build
 - Keep examples generic.
 - Do not include personal paths or private network addresses.
 - Keep Docker networking generic unless upstream asks for a specific deployment topology.
-- Keep remote ComfyUI disabled by default.
+- Keep non-Docker remote ComfyUI disabled by default; keep Docker Compose remote access enabled unless the deployment is intentionally localhost-only.
 - Split remote ComfyUI and Docker into separate PRs if upstream review benefits from smaller changes.

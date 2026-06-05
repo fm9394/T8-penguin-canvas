@@ -80,3 +80,99 @@ test('external provider test endpoint resolves saved providers without leaking s
   assert.equal(missing.success, false);
   assert.equal(missing.code, 'provider_not_found');
 });
+
+test('external provider test endpoint uses saved remote ComfyUI url when remote access is enabled', async (t) => {
+  const previousRemote = process.env.T8_COMFYUI_ALLOW_REMOTE;
+  process.env.T8_COMFYUI_ALLOW_REMOTE = '1';
+  t.after(() => {
+    if (previousRemote === undefined) delete process.env.T8_COMFYUI_ALLOW_REMOTE;
+    else process.env.T8_COMFYUI_ALLOW_REMOTE = previousRemote;
+  });
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 't8-external-comfyui-'));
+  t.after(() => {
+    const settingsFile = path.join(tmpDir, 'settings.json');
+    if (fs.existsSync(settingsFile)) fs.unlinkSync(settingsFile);
+    for (const dir of ['save', 'canvas', 'resources', 'themes'].map((name) => path.join(tmpDir, name))) {
+      if (fs.existsSync(dir)) fs.rmdirSync(dir);
+    }
+    if (fs.existsSync(tmpDir)) fs.rmdirSync(tmpDir);
+  });
+
+  const config = require('../backend/src/config.js');
+  const oldConfig = {
+    SETTINGS_FILE: config.SETTINGS_FILE,
+    DEFAULT_LOCAL_SAVE_DIR: config.DEFAULT_LOCAL_SAVE_DIR,
+    DEFAULT_CANVAS_AUTO_SAVE_DIR: config.DEFAULT_CANVAS_AUTO_SAVE_DIR,
+    DEFAULT_RESOURCE_LIBRARY_DIR: config.DEFAULT_RESOURCE_LIBRARY_DIR,
+    DEFAULT_THEME_TEMPLATE_DIR: config.DEFAULT_THEME_TEMPLATE_DIR,
+  };
+  t.after(() => Object.assign(config, oldConfig));
+  config.SETTINGS_FILE = path.join(tmpDir, 'settings.json');
+  config.DEFAULT_LOCAL_SAVE_DIR = path.join(tmpDir, 'save');
+  config.DEFAULT_CANVAS_AUTO_SAVE_DIR = path.join(tmpDir, 'canvas');
+  config.DEFAULT_RESOURCE_LIBRARY_DIR = path.join(tmpDir, 'resources');
+  config.DEFAULT_THEME_TEMPLATE_DIR = path.join(tmpDir, 'themes');
+
+  const remoteBaseUrl = 'http://comfyui.example.test:18866';
+  let queueRequestUrl = '';
+  const nativeFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: any, init?: any) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input?.url;
+    if (url === `${remoteBaseUrl}/queue`) {
+      queueRequestUrl = url;
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return nativeFetch(input, init);
+  }) as typeof fetch;
+  t.after(() => {
+    globalThis.fetch = nativeFetch;
+  });
+
+  const express = require('express');
+  const settingsRouter = require('../backend/src/routes/settings.js');
+  const externalProvidersRouter = require('../backend/src/routes/externalProviders.js');
+  const app = express();
+  app.use(express.json({ limit: '1mb' }));
+  app.use('/api/settings', settingsRouter);
+  app.use('/api/proxy/external', externalProvidersRouter);
+
+  const server = await new Promise<any>((resolve) => {
+    const s = app.listen(0, '127.0.0.1', () => resolve(s));
+  });
+  t.after(() => server.close());
+
+  const base = `http://127.0.0.1:${server.address().port}`;
+  const saved = await fetch(`${base}/api/settings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      advancedProviders: [
+        {
+          id: 'comfyui',
+          label: 'ComfyUI',
+          protocol: 'comfyui',
+          enabled: false,
+          baseUrl: remoteBaseUrl,
+          comfyuiConfig: {
+            instances: [remoteBaseUrl],
+            workflows: [],
+          },
+        },
+      ],
+    }),
+  }).then((res) => res.json());
+  assert.equal(saved.success, true);
+
+  const tested = await fetch(`${base}/api/proxy/external/test-provider`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ providerId: 'comfyui', timeoutMs: 1000 }),
+  }).then((res) => res.json());
+
+  assert.equal(tested.success, true);
+  assert.equal(tested.code, 'connected');
+  assert.equal(tested.data.provider.baseUrl, remoteBaseUrl);
+  assert.deepEqual(tested.data.provider.comfyuiConfig.instances, [remoteBaseUrl]);
+  assert.equal(queueRequestUrl, `${remoteBaseUrl}/queue`);
+});

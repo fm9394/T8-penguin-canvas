@@ -562,8 +562,21 @@ Before opening a PR upstream:
 - `src/components/ApiSettings.tsx`
 - `tests/advancedProviders.test.ts`
 - `tests/comfyuiProvider.test.ts`
+- `tests/externalProvidersRoute.test.ts`
+- `tests/dockerComposeConfig.test.ts`
 - `README.md`
 
 ### Recommended for long-term fork upkeep
 
 - `docs/fork-maintenance.md`
+
+## Follow-up: Docker Remote Access Regression
+
+After the first implementation, the Docker Compose service still had `T8_COMFYUI_ALLOW_REMOTE` documented but commented out. In that state the GUI accepted a non-local ComfyUI URL, but the backend normalization policy rejected it and fell back to the built-in local ComfyUI provider. The visible symptom was a misleading `fetch failed` against the local default instead of the saved remote URL.
+
+Minimal follow-up changes:
+
+- enable `T8_COMFYUI_ALLOW_REMOTE: "1"` in `docker-compose.yml`
+- add `tests/dockerComposeConfig.test.ts` so Docker Compose cannot regress to a commented remote-access setting
+- extend `tests/externalProvidersRoute.test.ts` so a saved remote ComfyUI provider is preserved and the test endpoint calls the remote `/queue` URL when remote access is enabled
+- update README and fork maintenance notes to distinguish non-Docker local-only defaults from Docker Compose remote-enabled deployment

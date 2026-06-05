@@ -126,7 +126,7 @@ npm run dev
 | 扩展平台 API Key / Token | OpenAI 兼容、ModelScope、火山引擎、即梦 CLI 等高级来源 | 在「扩展 API 平台【高级/可选】」里按平台填写 Base URL / Token / AK/SK / CLI 路径 |
 | ComfyUI | ComfyUI 工作流、ComfyUI 超市、ComfyUI 应用制作工具 | 默认 `http://127.0.0.1:8188`，需先启动 ComfyUI |
 
-传统 Key、扩展平台密钥和 ComfyUI 配置都会保存到 `data/settings.json`；前端 GET 接口仅返回 `****xxxx` 脱敏值或可用状态，明文仅供后端代理本地使用，永不泄露。ComfyUI 默认只允许连接本机 `localhost / 127.0.0.1` 服务；如需由后端接入其他允许地址，可在后端运行环境中设置 `T8_COMFYUI_ALLOW_REMOTE=1`。
+传统 Key、扩展平台密钥和 ComfyUI 配置都会保存到 `data/settings.json`；前端 GET 接口仅返回 `****xxxx` 脱敏值或可用状态，明文仅供后端代理本地使用，永不泄露。ComfyUI 默认只允许连接本机 `localhost / 127.0.0.1` 服务；如需由后端接入其他允许地址，可在后端运行环境中设置 `T8_COMFYUI_ALLOW_REMOTE=1`。随附的 Docker Compose 部署已启用该变量，便于容器后端连接其他主机或容器中的 ComfyUI。
 
 > **不需要全部配置**：只填需要使用的那一类即可，其它节点会在运行时友好提示「未配置 XXX API Key」。
 
@@ -145,13 +145,13 @@ docker compose up -d --build
 - Web：<http://127.0.0.1:18766>
 - 健康检查：<http://127.0.0.1:18766/api/status>
 
-如果容器内的后端需要连接非本机 ComfyUI 地址，在 `docker-compose.yml` 中启用：
+随附的 `docker-compose.yml` 已启用远端 ComfyUI 访问，便于容器内后端连接其他主机或容器中的 ComfyUI：
 
 ```yml
 T8_COMFYUI_ALLOW_REMOTE: "1"
 ```
 
-注意：Docker 容器里的 `localhost` 指容器自身，不是宿主机。ComfyUI 地址必须从容器网络视角可访问；如需连接宿主机或其他网络中的 ComfyUI，请填写容器能访问到的地址，并只在可信网络中开启远端访问。
+注意：Docker 容器里的 `localhost` 指容器自身，不是宿主机。ComfyUI 地址必须从容器网络视角可访问；如需连接宿主机或其他网络中的 ComfyUI，请填写容器能访问到的地址，并只在可信网络中开启远端访问。不需要远端 ComfyUI 时，可移除或设为 `T8_COMFYUI_ALLOW_REMOTE: "0"`。
 
 ---
 
