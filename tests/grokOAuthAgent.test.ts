@@ -38,6 +38,7 @@ test('Grok OAuth public backend exposes hook-backed routes with private-module f
   assert.match(route, /router\.get\('\/status'/);
   assert.match(route, /router\.post\('\/login\/start'/);
   assert.match(route, /router\.post\('\/login\/poll'/);
+  assert.match(route, /router\.post\('\/login\/complete'/);
   assert.match(route, /router\.post\('\/logout'/);
   assert.match(route, /router\.post\('\/chat\/stream'/);
   assert.match(route, /router\.post\('\/image'/);
@@ -54,6 +55,7 @@ test('Grok OAuth frontend service and node support streaming and multimodal outp
   const node = read('../src/components/nodes/GrokOAuthAgentNode.tsx');
 
   assert.match(service, /streamGrokOAuthChat/);
+  assert.match(service, /completeGrokOAuthLogin/);
   assert.match(service, /response\.output_text\.delta/);
   assert.match(service, /choices\?\.\[0\]\?\.delta\?\.content/);
   assert.match(service, /generateGrokOAuthImage/);
@@ -61,6 +63,8 @@ test('Grok OAuth frontend service and node support streaming and multimodal outp
   assert.match(service, /generateGrokOAuthTts/);
   assert.match(service, /transcribeGrokOAuthAudio/);
   assert.match(node, /流式聊天/);
+  assert.match(node, /无法建立连接/);
+  assert.match(node, /完成授权/);
   assert.match(node, /imageUrl/);
   assert.match(node, /videoUrl/);
   assert.match(node, /audioUrl/);

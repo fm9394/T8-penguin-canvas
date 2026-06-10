@@ -21,6 +21,8 @@ import {
   narutoThemeMusicUrl,
   rhHiddenThemeMusicUrl,
   rhThemeMusicUrl,
+  saintSeiyaHadesThemeMusicUrl,
+  saintSeiyaThemeMusicUrl,
   slamdunkThemeMusicUrl,
   soccerThemeMusicUrl,
 } from '../theme/defaultTemplates';
@@ -347,14 +349,16 @@ function fallbackMusic(legacyStyle: LegacyThemeStyle, visuals?: ThemeVisuals): T
   }
   if (visualStyle === 'saint-seiya') {
     return {
-      title: 'Pegasus Cosmos Loop',
+      title: '天马幻想',
       preset: 'pegasus-cosmos',
-      source: 'synth',
-      hiddenTitle: 'Hades Eclipse',
-      hiddenVolume: 0.18,
-      volume: 0.16,
+      source: 'url',
+      url: saintSeiyaThemeMusicUrl,
+      hiddenTitle: '冥界篇 · 最后的圣战',
+      hiddenUrl: saintSeiyaHadesThemeMusicUrl,
+      hiddenVolume: 0.2,
+      volume: 0.18,
       bpm: 148,
-      copyrightNote: '原创圣域小宇宙合成循环；冥界篇使用隐藏合成 preset。可替换为已授权音频 URL。',
+      copyrightNote: '圣域篇默认使用天马幻想；冥界篇开启后切换最后的圣战，可替换为已授权音频 URL。',
     };
   }
   if (legacyStyle === 'tech' || visualStyle === 'tech') {

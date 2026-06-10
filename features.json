@@ -1,7 +1,7 @@
 {
   "$schema": "本文件为 T8-penguin-canvas 节点清单防丢失锁,任何节点删减都需要在 roadmap.md 中说明并更新本文件。",
   "version": "2.1.5",
-  "lastUpdated": "2026-06-09-source-v215-dev-maker-boundary",
+  "lastUpdated": "2026-06-10-saint-seiya-achievement-stage",
   "sourceReleaseV215": {
     "version": "2.1.5",
     "status": "source-only",
@@ -13,7 +13,7 @@
       "RH 工具箱运行端首页轻量按钮、悬停说明区、Prompt/text 默认值直显、inputSchema 字段直显和本地素材输入。",
       "Grok OAuth Agent 公开外壳和后端 hook 路由；真实 OAuth / xAI 调用仍由 local-private 私有扩展提供。",
       "长按鼠标中键圆盘菜单与自定义入口，左下角控制栏位置收敛。",
-      "圣斗士主题首版：圣衣收集、宝箱、小地图、战斗、经验升级和冥界篇隐藏模式占位。",
+      "圣斗士主题增强：圣衣收集、宝箱、小地图、20-30 秒自动战斗、经验升级、冥界篇隐藏模式、10 秒过场动画和成就奖励影片大屏播放。",
       "公开检查脚本新增制作器源码拦截，避免 RH 工具箱制作器 / FAL 应用制作工具误入公开提交。"
     ],
     "excludedPrivateDevScope": [
@@ -66,9 +66,9 @@
     "devOnly": true
   },
   "saintSeiyaTheme": {
-    "status": "implemented-dev-first-pass",
+    "status": "implemented-theme-redesign",
     "date": "2026-06-09",
-    "description": "新增圣斗士主题首版闭环：十二宫 / 冥界篇双主题、圣衣宝箱、小地图跳转、3 秒开启、圣斗士战斗、经验升级、12 黄金圣衣解锁冥界篇和成就占位。",
+    "description": "圣斗士主题重做为完整强视觉：十二宫 / 冥界篇双主题、圣域星图画布、圣衣箱节点、宝箱小地图、战斗面板、经验升级和 12 黄金圣衣解锁冥界篇。",
     "paths": [
       "roadmap.md",
       "src/data/saintSeiyaCloths.ts",
@@ -91,10 +91,25 @@
     ],
     "capabilities": [
       "内置主题 saint-seiya，普通模式显示圣域 / 十二宫视觉，集齐 12 件黄金圣衣后可切换冥界篇隐藏模式。",
-      "大地图每 60 秒刷新一个宝箱，宝箱 10 秒未开启消失；小地图显示青铜 / 白银 / 黄金宝箱并支持点击跳转。",
+      "主题视觉从小面板扩展到全局：顶部栏、侧栏、画布主体、ReactFlow 背景、节点、输入框、按钮、连线、端口、控制条和小地图都会进入圣域星图 / 圣衣箱风格。",
+      "普通模式使用深蓝圣域星空、金色十二宫罗盘、青色小宇宙光效和大理石圣衣箱节点；冥界模式切换为暗紫黑日蚀、红色冥界能量和金色星座环。",
+      "新增回归测试锁住 Saint Seiya 主题必须覆盖 .t8-app-shell、.t8-sidebar、.t8-canvas-shell、react-flow__pane、react-flow__minimap 和冥界模式。",
+      "大地图每 60 秒刷新一个宝箱，宝箱 10 秒未开启消失；宝箱标记叠加在右下角 ReactFlow 小地图上，避免出现第二张小地图，并支持点击跳转。",
       "开启宝箱需要画布中心保持 3 秒，随后进入对应青铜 / 白银 / 黄金圣斗士试炼。",
-      "战斗按 Lv1-99、HP/MP/ATK/DEF/SPD、圣衣加成、胜负经验和招式消耗结算；胜利才会获得圣衣。",
-      "12 黄金圣衣全收集后触发雅典娜归来过场动画、开启冥界篇，并记录隐藏成就和奖励影片占位。",
+      "圣域罗盘改成顶部可折叠横向 HUD：不再挡左下角侧栏，显示等级、经验、当前黄金宫、圣衣计数和宝箱状态。",
+      "圣域罗盘新增十二黄金宫独立进度 UI：白羊到双鱼各有独立符号、宫位、图案、特效名和解锁文案，已收集 / 下一宫 / 未解锁状态一眼可见。",
+      "战斗按 Lv1-99、HP/MP/ATK/DEF/SPD、圣衣加成、胜负经验和招式消耗自动结算；开启试炼后系统会优先释放当前最强可用招式，胜利才会获得圣衣。",
+      "战斗结算从一次性字符串升级为结构化事件队列，前端按节奏逐行播放入场、架势、攻击、格挡、反击、胜负和奖励，并同步显示 HP / 小宇宙条。",
+      "战斗数值重做为 20-30 秒自动试炼节奏：青铜 8 回合、白银 9 回合、黄金 10 回合，每回合包含小宇宙交锋和双方行动，伤害按剩余回合节奏控制，避免秒杀或瞬间刷完。",
+      "每个招式会映射独立 effectId、视觉特效家族和 WebAudio 音效 cue，覆盖流星、庐山龙气、冰结、锁链、凤凰、雷光、银河、水晶、巨角、冥界、六道、天秤兵装、赤针、黄金箭、圣剑、玫瑰和护壁。",
+      "战斗日志改为贴右侧快捷栏下方的临时浮层，仅战斗时显示；结算后显示 3、2、1 倒计时并自动隐藏，不再占用顶部圣域罗盘或画布创作空间。",
+      "获得青铜 / 白银 / 黄金圣衣会触发不同等级的解锁演出；黄金圣衣会读取对应十二宫专属视觉配置，突出每件黄金圣衣的差异。",
+      "黄金圣衣按十二宫顺序推进：白羊、金牛、双子、巨蟹、狮子、处女、天秤、天蝎、射手、山羊、水瓶、双鱼，不能跳关随机获得。",
+      "12 黄金圣衣全收集后触发十二星座黄金圣衣集结 / 雅典娜归来过场动画、开启冥界篇，并记录隐藏成就；奖励影片本地以 .t8media 加密保存，解锁后通过成就影片馆解密播放。",
+      "切换进入冥界篇会重新播放十二黄金圣衣集结 / 雅典娜归来过场，过场时长统一为 10 秒。",
+      "主题成就抽屉在圣斗士 / 冥界模式下使用专属高对比 token，修复深色、浅色和冥界浅色模式中灰白字不清楚的问题。",
+      "成就主题详情和影片馆不再内嵌小视频；点击播放会打开圣斗士大屏奖励舞台，带星图、小宇宙背景和大尺寸 video 播放器。",
+      "圣域篇默认音乐为 saint-seiya-pegasus-fantasy.mp3，冥界篇默认音乐为 saint-seiya-hades-last-holy-war.mp3；Hades 浅色模式额外加固节点、输入框、快捷栏和圣域罗盘文字对比度。",
       "首批数据包含 5 件青铜、12 件白银、12 件黄金圣衣；黄金圣衣包含原作常用招式名。"
     ],
     "verification": [
@@ -281,7 +296,7 @@
   "canvasTutorialTopbarPanel": {
     "status": "implemented",
     "date": "2026-06-08",
-    "description": "顶部栏在“最新应用”左侧新增“画布教程”入口，按第一弹到第九弹整理 T8 画布教程 Bilibili / Youtube 链接；“最新应用 · RunningHub”弹窗移除“获取 RH ApiKey”快捷入口，只保留 RunningHub 国内/海外站和邀请码提示。",
+    "description": "顶部栏在“最新应用”左侧新增“画布教程”入口，按第一弹到第十弹整理 T8 画布教程 Bilibili / Youtube 链接；“最新应用 · RunningHub”弹窗移除“获取 RH ApiKey”快捷入口，只保留 RunningHub 国内/海外站和邀请码提示。",
     "paths": [
       "src/App.tsx",
       "tests/updateMdRegressions.test.ts",
@@ -333,6 +348,11 @@
         "title": "教程第九弹（新增3D全景功能及资产库，一键自动更新功能，输入框放大按钮，修复即梦CLI的多参问题，AI去水印节点功能升级，新增聚合解析功能，可获取17个平台无水印视频，优化启动速度，优化画布加载如慢加载，支持自定义快捷键设置）",
         "bilibili": "https://www.bilibili.com/video/BV1gSEA6GEDQ/",
         "youtube": "https://www.youtube.com/watch?v=-nmX9oB-MX"
+      },
+      {
+        "title": "教程第十弹（3D全景功能增强，Figma联动，支持阿里云Oss及腾讯云Cos，新增放置栏，修正新香蕉的模型映射，上传素材的上限从10M到20M，新增veo-omni模型，新增提示词模板系统及增强功能，comfyui支持remote模式，新增newapi分组令牌高级模式，LLM/VISIOIN节点支持流式删除，分类独立APIKEY支持删除功能，新增画布教程模块，支持上游文本联动生成节点@模式，即梦CLI模型补全，素材支持直接拖到浏览器外文件夹）",
+        "bilibili": "https://www.bilibili.com/video/BV1N9Eg6QEHs/",
+        "youtube": "https://www.youtube.com/watch?v=zIW7PbEWQAs"
       }
     ],
     "verification": [
@@ -1230,7 +1250,7 @@
   "achievementSystem": {
     "version": "2.0.4",
     "status": "first-stage-implemented",
-    "description": "十一套系统主题独立成就、有效创作时长、隐藏模式勋章与奖励影片占位系统。奖励影片素材暂未提供，影片馆使用“待解锁 / 影片素材待提供”占位文案。",
+    "description": "十一套系统主题独立成就、有效创作时长、隐藏模式勋章与奖励影片系统。未提供素材的影片仍使用“待解锁 / 影片素材待提供”占位；已接入的圣斗士隐藏奖励以本地加密媒体解锁播放。",
     "manifest": {
       "sharedJson": "shared/achievementManifest.json",
       "frontendWrapper": "src/data/achievementManifest.ts",
@@ -1374,10 +1394,10 @@
           "soccer-hero-style": "soccer-tsubasa-burning-hero.mid",
           "dragon-ball-style": "dragonball-makafushigi-adventure.mp3",
           "dragon-ball-shenron-hidden": "dragonball-shenron-cha-la-head-cha-la.mp3",
-          "saint-seiya-style": "synth:pegasus-cosmos",
-          "saint-seiya-hades-hidden": "synth:hades-eclipse"
+          "saint-seiya-style": "saint-seiya-pegasus-fantasy.mp3",
+          "saint-seiya-hades-hidden": "saint-seiya-hades-last-holy-war.mp3"
         },
-        "rule": "主题音乐默认静音，通常只在用户主动点击播放按钮后播放；RH 鸭鸭隐藏模式会自动切换 rh-hidden-saya.mp3，幽游白书肖像大师隐藏模式会自动切换 yyh-hidden-tonight.mp3，七龙珠神龙隐藏模式会自动切换 dragonball-shenron-cha-la-head-cha-la.mp3，圣斗士冥界篇会切换到 hades-eclipse 合成 preset。模板编辑器支持上传替换，导出模板可携带 data:audio/*。"
+        "rule": "主题音乐默认静音，通常只在用户主动点击播放按钮后播放；RH 鸭鸭隐藏模式会自动切换 rh-hidden-saya.mp3，幽游白书肖像大师隐藏模式会自动切换 yyh-hidden-tonight.mp3，七龙珠神龙隐藏模式会自动切换 dragonball-shenron-cha-la-head-cha-la.mp3，圣斗士冥界篇会切换到 saint-seiya-hades-last-holy-war.mp3。模板编辑器支持上传替换，导出模板可携带 data:audio/*。"
       }
     },
     "styles": {
@@ -1536,7 +1556,7 @@
           "nodeFrame": "cloth-box-card",
           "headerMark": "SANCTUARY"
         },
-        "music": "普通模式使用 pegasus-cosmos 合成 preset；集齐 12 黄金圣衣后解锁冥界篇并切换 hades-eclipse 合成 preset；默认静音，用户可在主题模板中上传或填写授权音频 URL 替换"
+        "music": "普通模式使用 saint-seiya-pegasus-fantasy.mp3；集齐 12 黄金圣衣后解锁冥界篇并切换 saint-seiya-hades-last-holy-war.mp3；pegasus-cosmos / hades-eclipse 仅作为合成兜底 preset；默认静音，用户可在主题模板中上传或填写授权音频 URL 替换"
       }
     },
     "defaultStyle": "pixel",

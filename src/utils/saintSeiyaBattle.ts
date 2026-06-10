@@ -35,8 +35,73 @@ export interface SaintBattleReport {
   expGain: number;
   playerHp: number;
   enemyHp: number;
+  playerMaxHp: number;
+  enemyMaxHp: number;
+  playerMp: number;
+  enemyMp: number;
+  playerMaxMp: number;
+  enemyMaxMp: number;
   usedCosmoBurst: boolean;
   log: string[];
+  events: SaintBattleEvent[];
+}
+
+export type SaintSkillEffectStyle =
+  | 'strike'
+  | 'cosmo'
+  | 'meteor'
+  | 'dragon'
+  | 'ice'
+  | 'chain'
+  | 'fire'
+  | 'lightning'
+  | 'galaxy'
+  | 'crystal'
+  | 'horn'
+  | 'underworld'
+  | 'lotus'
+  | 'weapon'
+  | 'needle'
+  | 'arrow'
+  | 'blade'
+  | 'aurora'
+  | 'rose'
+  | 'shield';
+
+export type SaintSkillSoundCue = SaintSkillEffectStyle;
+
+export type SaintBattleEventKind =
+  | 'intro'
+  | 'stance'
+  | 'clash'
+  | 'player-guard'
+  | 'player-attack'
+  | 'enemy-attack'
+  | 'victory'
+  | 'defeat'
+  | 'reward';
+
+export interface SaintBattleEvent {
+  id: string;
+  turn: number;
+  actor: 'player' | 'enemy' | 'system';
+  kind: SaintBattleEventKind;
+  text: string;
+  moveName?: string;
+  damage?: number;
+  playerHp: number;
+  enemyHp: number;
+  playerMp: number;
+  enemyMp: number;
+  playerMaxHp: number;
+  enemyMaxHp: number;
+  playerMaxMp: number;
+  enemyMaxMp: number;
+  accent?: string;
+  effectId?: string;
+  effectStyle?: SaintSkillEffectStyle;
+  soundCue?: SaintSkillSoundCue;
+  intensity?: number;
 }
 
 export type BattleStrategy = 'attack' | 'skill' | 'guard' | 'cosmo' | 'auto';
@@ -101,19 +166,19 @@ export function bestCollectedCloth(collected: Record<string, unknown> | Partial<
 export function buildPlayerStats(level: number, equippedRank?: SaintClothRank | null): SaintCombatStats {
   const base = {
     level,
-    hp: 80 + level * 12,
-    mp: 28 + level * 4,
-    atk: 12 + level * 2.4,
-    def: 6 + level * 1.15,
+    hp: 150 + level * 18,
+    mp: 44 + level * 5,
+    atk: 10 + level * 1.45,
+    def: 9 + level * 1.35,
     spd: 8 + level * 0.45,
     cosmoRegen: 0,
   };
   const bonus = equippedRank === 'gold'
-    ? { hp: 1.28, mp: 1.22, atk: 1.26, def: 1.24, cosmoRegen: 5 }
+    ? { hp: 1.28, mp: 1.22, atk: 1.26, def: 1.24, cosmoRegen: 8 }
     : equippedRank === 'silver'
-      ? { hp: 1.16, mp: 1.12, atk: 1.15, def: 1.14, cosmoRegen: 2 }
+      ? { hp: 1.16, mp: 1.12, atk: 1.15, def: 1.14, cosmoRegen: 5 }
       : equippedRank === 'bronze'
-        ? { hp: 1.08, mp: 1.06, atk: 1.08, def: 1.06, cosmoRegen: 1 }
+        ? { hp: 1.08, mp: 1.06, atk: 1.08, def: 1.06, cosmoRegen: 3 }
         : { hp: 1, mp: 1, atk: 1, def: 1, cosmoRegen: 0 };
   return {
     level,
@@ -130,33 +195,33 @@ export function buildEnemyStats(rank: SaintClothRank, level: number): SaintComba
   if (rank === 'gold') {
     return {
       level,
-      hp: Math.round(240 + level * 13),
-      mp: Math.round(85 + level * 3.2),
-      atk: Math.round(28 + level * 2.8),
-      def: Math.round(20 + level * 1.45),
+      hp: Math.round(430 + level * 18),
+      mp: Math.round(96 + level * 3.8),
+      atk: Math.round(16 + level * 1.45),
+      def: Math.round(17 + level * 1.32),
       spd: Math.round(11 + level * 0.5),
-      cosmoRegen: 4,
+      cosmoRegen: 7,
     };
   }
   if (rank === 'silver') {
     return {
       level,
-      hp: Math.round(130 + level * 11),
-      mp: Math.round(45 + level * 2.6),
-      atk: Math.round(18 + level * 2.35),
-      def: Math.round(12 + level * 1.25),
+      hp: Math.round(250 + level * 16),
+      mp: Math.round(58 + level * 3),
+      atk: Math.round(11 + level * 1.35),
+      def: Math.round(11 + level * 1.18),
       spd: Math.round(9 + level * 0.48),
-      cosmoRegen: 2,
+      cosmoRegen: 5,
     };
   }
   return {
     level,
-    hp: Math.round(70 + level * 10),
-    mp: Math.round(20 + level * 2),
-    atk: Math.round(10 + level * 2.2),
-    def: Math.round(5 + level * 1.1),
+    hp: Math.round(145 + level * 14),
+    mp: Math.round(34 + level * 2.4),
+    atk: Math.round(8 + level * 1.25),
+    def: Math.round(7 + level * 1.05),
     spd: Math.round(8 + level * 0.42),
-    cosmoRegen: 1,
+    cosmoRegen: 3,
   };
 }
 
@@ -196,13 +261,124 @@ function chooseMove(moves: SaintMove[], mp: number, strategy: BattleStrategy, rn
       .filter((move) => move.kind !== 'guard')
       .sort((a, b) => b.power - a.power)[0] || BASIC_ATTACK;
   }
-  const usable = affordable.filter((move) => move.kind !== 'guard');
-  return usable[Math.floor(rng() * usable.length)] || BASIC_ATTACK;
+  const usable = affordable
+    .filter((move) => move.kind !== 'guard')
+    .sort((a, b) => b.power - a.power || a.mpCost - b.mpCost);
+  return usable[0] || BASIC_ATTACK;
 }
 
 export function saintDamage(atk: number, def: number, power = 1, rng: () => number = Math.random) {
   const variance = 0.9 + rng() * 0.2;
-  return Math.max(4, Math.round((atk * power - def * 0.55) * variance));
+  return Math.max(5, Math.round((atk * power * 0.78 - def * 0.38) * variance));
+}
+
+function textIncludes(source: string, terms: string[]) {
+  return terms.some((term) => source.includes(term));
+}
+
+export function saintMoveEffectStyle(move: SaintMove, cloth?: SaintCloth | null): SaintSkillEffectStyle {
+  if (move.kind === 'guard') return 'shield';
+  const source = `${move.id} ${move.name} ${cloth?.id || ''} ${cloth?.constellation || ''} ${cloth?.element || ''}`.toLowerCase();
+  if (textIncludes(source, ['pegasus', '流星', '彗星', '回旋'])) return 'meteor';
+  if (textIncludes(source, ['dragon', 'rozan', '庐山', '升龙', '百龙', '龙气', '天龙'])) return 'dragon';
+  if (textIncludes(source, ['aurora', '曙光', '极光'])) return 'aurora';
+  if (textIncludes(source, ['diamond', 'freezing', 'cygnus', '冰', '钻石', '绝对零度', '白鸟'])) return 'ice';
+  if (textIncludes(source, ['chain', 'andromeda', '锁链', '星云'])) return 'chain';
+  if (textIncludes(source, ['phoenix', '凤凰', '凤翼', '不死鸟', '火焰', '烈焰'])) return 'fire';
+  if (textIncludes(source, ['lightning', 'thunder', '闪电', '雷光', '雷电'])) return 'lightning';
+  if (textIncludes(source, ['galaxy', 'dimension', 'genro', '银河', '异次元', '幻胧', '双子'])) return 'galaxy';
+  if (textIncludes(source, ['crystal', 'starlight', 'stardust', '水晶', '星光', '星屑', '白羊'])) return 'crystal';
+  if (textIncludes(source, ['horn', 'bull', '金牛', '巨角', '号角'])) return 'horn';
+  if (textIncludes(source, ['sekishiki', 'hades', 'meikai', '冥界', '积尸', '黄泉', '巨蟹'])) return 'underworld';
+  if (textIncludes(source, ['tenbu', 'rikudo', 'virgo', '天舞', '六道', '莲', '处女'])) return 'lotus';
+  if (textIncludes(source, ['libra', '天秤', '兵器', '武器'])) return 'weapon';
+  if (textIncludes(source, ['scarlet', 'antares', 'scorpio', '猩红', '赤针', '安达里士', '天蝎'])) return 'needle';
+  if (textIncludes(source, ['arrow', 'sagittarius', '射手', '黄金箭'])) return 'arrow';
+  if (textIncludes(source, ['excalibur', 'blade', 'capricorn', '圣剑', '山羊', '跳跃石'])) return 'blade';
+  if (textIncludes(source, ['rose', 'pisces', '玫瑰', '双鱼'])) return 'rose';
+  if (move.kind === 'ultimate' || move.kind === 'cosmo') return 'cosmo';
+  return 'strike';
+}
+
+export function saintMoveSoundCue(move: SaintMove, cloth?: SaintCloth | null): SaintSkillSoundCue {
+  return saintMoveEffectStyle(move, cloth);
+}
+
+function saintMoveEffectId(move: SaintMove, cloth?: SaintCloth | null) {
+  return `${cloth?.id || 'basic'}-${move.id}-${saintMoveEffectStyle(move, cloth)}`;
+}
+
+function rankTrialName(rank: SaintClothRank) {
+  if (rank === 'gold') return '黄金圣斗士';
+  if (rank === 'silver') return '白银圣斗士';
+  return '青铜圣斗士';
+}
+
+function battleEffectPhrase(style: SaintSkillEffectStyle, element: string) {
+  switch (style) {
+    case 'meteor': return `${element}划成数十道流星轨迹`;
+    case 'dragon': return '龙形气劲沿地面盘旋升腾';
+    case 'ice': return '冰晶从脚下铺开，空气瞬间凝白';
+    case 'aurora': return '极光像薄刃一样横切战场';
+    case 'chain': return '锁链绕成防线又突然收紧';
+    case 'fire': return '火羽卷起，把残影烧成金红色';
+    case 'lightning': return '雷光在一瞬间分裂成拳雨';
+    case 'galaxy': return '星河裂缝在身后张开';
+    case 'crystal': return '水晶碎屑折射出圣域星图';
+    case 'horn': return '巨角冲击让石阶低鸣';
+    case 'underworld': return '冥界波纹从脚下旋开';
+    case 'lotus': return '六道光轮层层展开';
+    case 'weapon': return '天秤兵装的虚影交错闪过';
+    case 'needle': return '赤针星点沿直线刺入';
+    case 'arrow': return '黄金箭翼拖出笔直光线';
+    case 'blade': return '无形圣剑把气流切成两半';
+    case 'rose': return '玫瑰花瓣在冲击前一刻静止';
+    case 'shield': return `${element}凝成半透明护壁`;
+    default: return `${element}小宇宙压缩成光`;
+  }
+}
+
+function moveFlavor(
+  move: SaintMove,
+  element: string,
+  damage: number,
+  actor: 'player' | 'enemy',
+  style: SaintSkillEffectStyle,
+  ownerName?: string,
+) {
+  const owner = ownerName || (actor === 'player' ? '你' : '对手');
+  const phrase = battleEffectPhrase(style, element);
+  if (move.kind === 'guard') return `${owner}架起${move.name}，${element}的小宇宙化成护壁。`;
+  if (move.kind === 'ultimate') {
+    return `${move.name}爆发，${phrase}，最终造成 ${damage} 点冲击。`;
+  }
+  if (move.kind === 'cosmo') {
+    return `${move.name}划出${element}轨迹，${phrase}，命中后造成 ${damage} 点伤害。`;
+  }
+  return `${move.name}连续逼近，${phrase}，拳压命中造成 ${damage} 点伤害。`;
+}
+
+function guardFlavor(move: SaintMove, regen: number) {
+  return `${move.name}展开防线，小宇宙回流${regen > 0 ? ` +${regen}` : ''}，下一击伤害会被削弱。`;
+}
+
+function targetTurnsForRank(rank: SaintClothRank) {
+  if (rank === 'gold') return 10;
+  if (rank === 'silver') return 9;
+  return 8;
+}
+
+function recoverMp(current: number, max: number, cost: number, regen: number) {
+  return Math.min(max, Math.max(0, current - cost) + Math.max(0, regen));
+}
+
+function paceBattleDamage(rawDamage: number, currentHp: number, maxHp: number, turn: number, targetTurns: number) {
+  if (turn >= targetTurns) return Math.max(1, Math.min(currentHp, rawDamage));
+  const protectedHp = Math.max(1, Math.round(maxHp * 0.12));
+  const availableDamage = Math.max(1, currentHp - protectedHp);
+  const remainingTurns = Math.max(1, targetTurns - turn + 1);
+  const rhythmCap = Math.max(6, Math.ceil(availableDamage / remainingTurns) + 10);
+  return Math.max(1, Math.min(rawDamage, availableDamage, rhythmCap));
 }
 
 export function simulateSaintBattle(args: {
@@ -225,40 +401,139 @@ export function simulateSaintBattle(args: {
   let usedCosmoBurst = false;
   const strategy = args.strategy || 'auto';
   const playerMoves = unlockedSaintMoves(args.collected);
-  const log = [
-    `Lv${level} 对阵 Lv${args.enemy.level} ${args.enemy.name}`,
-    equipped ? `装备 ${equipped.label}` : '未装备圣衣，以小宇宙迎战',
-  ];
+  const events: SaintBattleEvent[] = [];
+  const pushEvent = (
+    kind: SaintBattleEventKind,
+    actor: SaintBattleEvent['actor'],
+    turn: number,
+    text: string,
+    extra: Partial<Pick<SaintBattleEvent, 'moveName' | 'damage' | 'accent' | 'effectId' | 'effectStyle' | 'soundCue' | 'intensity'>> = {},
+  ) => {
+    events.push({
+      id: `${args.enemy.id}-${turn}-${events.length}-${kind}`,
+      turn,
+      actor,
+      kind,
+      text,
+      playerHp,
+      enemyHp,
+      playerMp,
+      enemyMp,
+      playerMaxHp: playerStats.hp,
+      enemyMaxHp: enemyStats.hp,
+      playerMaxMp: playerStats.mp,
+      enemyMaxMp: enemyStats.mp,
+      ...extra,
+    });
+  };
 
-  const maxTurns = 12;
+  pushEvent(
+    'intro',
+    'system',
+    0,
+    `圣域试炼展开：你 Lv${level} 对阵 ${args.enemy.name} Lv${args.enemy.level}，对方披挂${rankTrialName(args.enemy.rank)}的气息压迫全场。`,
+  );
+  pushEvent(
+    'stance',
+    'player',
+    0,
+    equipped
+      ? `你披挂 ${equipped.label}，${equipped.element}小宇宙沿圣衣纹路燃起。`
+      : '未装备圣衣，你以基础小宇宙摆开架势，准备硬闯这一宫。',
+  );
+
+  const targetTurns = targetTurnsForRank(args.enemy.rank);
+  const maxTurns = targetTurns;
+  let turnsResolved = 0;
   for (let turn = 1; turn <= maxTurns && playerHp > 0 && enemyHp > 0; turn += 1) {
+    turnsResolved = turn;
     const playerFirst = playerStats.spd >= enemyStats.spd || rng() > 0.55;
     const playerMove = chooseMove(playerMoves, playerMp, strategy, rng);
     const enemyMove = chooseMove(args.enemy.moves, enemyMp, 'auto', rng);
+    const playerMoveStyle = saintMoveEffectStyle(playerMove, equipped);
+    const enemyCloth = SAINT_SEIYA_CLOTH_BY_ID[args.enemy.clothId];
+    const enemyMoveStyle = saintMoveEffectStyle(enemyMove, enemyCloth);
+
+    pushEvent(
+      'clash',
+      'system',
+      turn,
+      `第${turn}回合：你与${args.enemy.name}的小宇宙在宫门前相撞，星尘像潮水一样退开，双方寻找下一瞬的破绽。`,
+      {
+        moveName: '小宇宙交锋',
+        accent: '#f8c84a',
+        effectId: `cosmo-clash-${turn}`,
+        effectStyle: 'cosmo',
+        soundCue: 'cosmo',
+        intensity: 0.62,
+      },
+    );
 
     const playerAction = () => {
+      if (playerHp <= 0 || enemyHp <= 0) return;
       if (playerMove.kind === 'guard') {
         guardNext = true;
-        playerMp = Math.max(0, playerMp - playerMove.mpCost) + playerStats.cosmoRegen;
-        log.push(`T${turn}：使用 ${playerMove.name}，防御姿态展开`);
+        const regen = playerStats.cosmoRegen + 8;
+        playerMp = recoverMp(playerMp, playerStats.mp, playerMove.mpCost, regen);
+        pushEvent('player-guard', 'player', turn, `第${turn}回合：${guardFlavor(playerMove, playerStats.cosmoRegen)}`, {
+          moveName: playerMove.name,
+          accent: '#67e8f9',
+          effectId: saintMoveEffectId(playerMove, equipped),
+          effectStyle: playerMoveStyle,
+          soundCue: saintMoveSoundCue(playerMove, equipped),
+          intensity: 0.58,
+        });
         return;
       }
-      playerMp = Math.max(0, playerMp - playerMove.mpCost) + playerStats.cosmoRegen;
-      const boost = strategy === 'cosmo' && !usedCosmoBurst ? 1.22 : 1;
-      if (strategy === 'cosmo') usedCosmoBurst = true;
-      const damage = saintDamage(playerStats.atk, enemyStats.def, playerMove.power * boost, rng);
+      playerMp = recoverMp(playerMp, playerStats.mp, playerMove.mpCost, playerStats.cosmoRegen);
+      const isCosmoBurst = playerMove.kind === 'ultimate' || strategy === 'cosmo';
+      const boost = isCosmoBurst && !usedCosmoBurst ? 1.22 : 1;
+      if (isCosmoBurst) usedCosmoBurst = true;
+      const rawDamage = saintDamage(playerStats.atk, enemyStats.def, playerMove.power * boost, rng);
+      const damage = paceBattleDamage(rawDamage, enemyHp, enemyStats.hp, turn, targetTurns);
       enemyHp = Math.max(0, enemyHp - damage);
-      log.push(`T${turn}：${playerMove.name} 命中，造成 ${damage}`);
+      const burstText = isCosmoBurst && boost > 1 ? '第七感瞬间点燃，' : '';
+      pushEvent(
+        'player-attack',
+        'player',
+        turn,
+        `第${turn}回合：${burstText}${moveFlavor(playerMove, equipped?.element || '流星', damage, 'player', playerMoveStyle)}`,
+        {
+          moveName: playerMove.name,
+          damage,
+          accent: playerMove.kind === 'ultimate' ? '#f8c84a' : '#2dd4bf',
+          effectId: saintMoveEffectId(playerMove, equipped),
+          effectStyle: playerMoveStyle,
+          soundCue: saintMoveSoundCue(playerMove, equipped),
+          intensity: playerMove.kind === 'ultimate' ? 1 : 0.78,
+        },
+      );
     };
 
     const enemyAction = () => {
-      if (enemyHp <= 0) return;
-      enemyMp = Math.max(0, enemyMp - enemyMove.mpCost) + enemyStats.cosmoRegen;
+      if (playerHp <= 0 || enemyHp <= 0) return;
+      enemyMp = recoverMp(enemyMp, enemyStats.mp, enemyMove.mpCost, enemyStats.cosmoRegen);
       const rawDamage = saintDamage(enemyStats.atk, playerStats.def, enemyMove.power, rng);
-      const damage = guardNext ? Math.max(2, Math.round(rawDamage * 0.45)) : rawDamage;
+      const guardedDamage = guardNext ? Math.max(2, Math.round(rawDamage * 0.45)) : rawDamage;
+      const damage = paceBattleDamage(guardedDamage, playerHp, playerStats.hp, turn, targetTurns);
+      const guarded = guardNext;
       guardNext = false;
       playerHp = Math.max(0, playerHp - damage);
-      log.push(`T${turn}：${args.enemy.constellation} ${enemyMove.name} 反击，受到 ${damage}`);
+      pushEvent(
+        'enemy-attack',
+        'enemy',
+        turn,
+        `第${turn}回合：${args.enemy.name}以${enemyMove.name}反击，${guarded ? '护壁挡下大半冲击，' : ''}${moveFlavor(enemyMove, enemyCloth?.element || args.enemy.constellation, damage, 'enemy', enemyMoveStyle, args.enemy.name)}`,
+        {
+          moveName: enemyMove.name,
+          damage,
+          accent: args.enemy.rank === 'gold' ? '#f8c84a' : args.enemy.rank === 'silver' ? '#cbd5e1' : '#34d399',
+          effectId: saintMoveEffectId(enemyMove, enemyCloth),
+          effectStyle: enemyMoveStyle,
+          soundCue: saintMoveSoundCue(enemyMove, enemyCloth),
+          intensity: enemyMove.kind === 'ultimate' ? 0.96 : 0.72,
+        },
+      );
     };
 
     if (playerFirst) {
@@ -270,17 +545,42 @@ export function simulateSaintBattle(args: {
     }
   }
 
-  const victory = enemyHp <= 0 || (playerHp > 0 && playerHp >= enemyHp);
+  const playerHpRatio = playerHp / Math.max(1, playerStats.hp);
+  const enemyHpRatio = enemyHp / Math.max(1, enemyStats.hp);
+  const victory = enemyHp <= 0 || (playerHp > 0 && playerHpRatio >= enemyHpRatio);
   const expGain = rewardExpForRank(args.enemy.rank, victory);
-  log.push(victory ? `战斗胜利，获得 ${expGain} 经验` : `战斗失败，仍获得 ${expGain} 经验`);
+  pushEvent(
+    victory ? 'victory' : 'defeat',
+    'system',
+    Math.max(1, turnsResolved + 1),
+    victory
+      ? `你压制了${args.enemy.name}的圣衣共鸣，试炼胜利。`
+      : `${args.enemy.name}守住了宫门，但你的星命点仍被点亮。`,
+    { accent: victory ? '#34d399' : '#fb7185' },
+  );
+  pushEvent(
+    'reward',
+    'system',
+    Math.max(1, turnsResolved + 1),
+    victory ? `获得 ${expGain} 经验，圣衣将在光芒中归位。` : `试炼失败，仍获得 ${expGain} 经验；下一次小宇宙会燃得更高。`,
+    { accent: victory ? '#f8c84a' : '#cbd5e1' },
+  );
+  const log = events.map((event) => event.text);
   return {
     victory,
-    turns: Math.min(maxTurns, log.length),
+    turns: turnsResolved,
     expGain,
     playerHp,
     enemyHp,
+    playerMaxHp: playerStats.hp,
+    enemyMaxHp: enemyStats.hp,
+    playerMp,
+    enemyMp,
+    playerMaxMp: playerStats.mp,
+    enemyMaxMp: enemyStats.mp,
     usedCosmoBurst,
     log,
+    events,
   };
 }
 
@@ -288,10 +588,28 @@ export function hasAllGoldCloths(collected: Record<string, unknown> | Partial<Re
   return SAINT_SEIYA_GOLD_CLOTHS.every((cloth) => Boolean(collected[cloth.id]));
 }
 
+export function nextGoldCloth(collected: Record<string, unknown> | Partial<Record<string, unknown>>) {
+  return SAINT_SEIYA_GOLD_CLOTHS.find((cloth) => !collected[cloth.id]) || null;
+}
+
+export function goldTempleProgress(collected: Record<string, unknown> | Partial<Record<string, unknown>>) {
+  const nextIndex = SAINT_SEIYA_GOLD_CLOTHS.findIndex((cloth) => !collected[cloth.id]);
+  return {
+    completed: nextIndex === -1 ? SAINT_SEIYA_GOLD_CLOTHS.length : nextIndex,
+    total: SAINT_SEIYA_GOLD_CLOTHS.length,
+    next: nextIndex === -1 ? null : SAINT_SEIYA_GOLD_CLOTHS[nextIndex],
+    nextIndex: nextIndex === -1 ? SAINT_SEIYA_GOLD_CLOTHS.length : nextIndex,
+  };
+}
+
 export function availableClothsByRank(
   rank: SaintClothRank,
   collected: Record<string, unknown> | Partial<Record<string, unknown>>,
 ) {
+  if (rank === 'gold') {
+    const next = nextGoldCloth(collected);
+    return next ? [next] : [];
+  }
   return SAINT_SEIYA_CLOTHS.filter((cloth) => cloth.rank === rank && !collected[cloth.id]);
 }
 

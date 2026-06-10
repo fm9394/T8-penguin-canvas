@@ -18,7 +18,7 @@ import {
 export const SAINT_SEIYA_SPAWN_INTERVAL_MS = 60_000;
 export const SAINT_SEIYA_CHEST_VISIBLE_MS = 10_000;
 export const SAINT_SEIYA_OPEN_MS = 3_000;
-export const SAINT_SEIYA_HADES_ANIMATION_MS = 5_200;
+export const SAINT_SEIYA_HADES_ANIMATION_MS = 10_000;
 
 export interface SaintSeiyaPoint {
   x: number;
@@ -56,6 +56,7 @@ export interface SaintSeiyaBattleState {
   startedAt: number;
   strategy: BattleStrategy;
   report: SaintBattleReport | null;
+  rewardApplied?: boolean;
 }
 
 export interface SaintSeiyaBattleResult {
@@ -95,6 +96,7 @@ interface SaintSeiyaSanctuaryState {
   setOpeningProgress: (progressMs: number, startedAt: number | null) => void;
   openTrackedChest: (now?: number) => SaintSeiyaBattleState | null;
   resolveBattle: (strategy?: BattleStrategy, now?: number) => SaintSeiyaBattleResult;
+  finalizeBattleReward: (now?: number) => SaintSeiyaBattleResult;
   clearBattle: () => void;
   setHadesModeActive: (active: boolean) => void;
   resetSanctuary: () => void;
@@ -133,6 +135,51 @@ function sanitizeCollected(value: Partial<Record<string, SaintSeiyaCollectedClot
     };
   }
   return next;
+}
+
+function resultFromResolvedBattle(args: {
+  state: SaintSeiyaSanctuaryState;
+  battle: SaintSeiyaBattleState;
+  report: SaintBattleReport;
+  now: number;
+  alreadyApplied?: boolean;
+}): SaintSeiyaBattleResult {
+  const { state, battle, report, now, alreadyApplied = false } = args;
+  const currentTotalExp = Math.max(0, state.totalExp);
+  const levelBefore = saintLevelFromExp(alreadyApplied ? Math.max(0, currentTotalExp - report.expGain) : currentTotalExp);
+  const nextTotalExp = alreadyApplied ? currentTotalExp : Math.max(0, currentTotalExp + report.expGain);
+  const levelAfter = saintLevelFromExp(nextTotalExp);
+  const cloth = SAINT_SEIYA_CLOTH_BY_ID[battle.chest.clothId];
+  const alreadyCollected = Boolean(state.collected[battle.chest.clothId]);
+  const nextCollected = { ...state.collected };
+  const firstGold = !alreadyApplied && report.victory && cloth?.rank === 'gold' && !alreadyCollected;
+  if (!alreadyApplied && report.victory && cloth && !alreadyCollected) {
+    nextCollected[cloth.id] = {
+      clothId: cloth.id,
+      rank: cloth.rank,
+      x: battle.chest.x,
+      y: battle.chest.y,
+      collectedAt: now,
+    };
+  }
+  const goldCompleted = hasAllGoldCloths(nextCollected);
+  const firstHadesUnlock = !alreadyApplied && goldCompleted && !state.hadesUnlockedAt;
+  const nextWinCount = alreadyApplied ? state.winCount : report.victory ? state.winCount + 1 : state.winCount;
+
+  return {
+    battle,
+    victory: report.victory,
+    clothId: report.victory ? battle.chest.clothId : null,
+    rank: report.victory ? battle.chest.rank : null,
+    expGain: report.expGain,
+    levelBefore,
+    levelAfter,
+    firstGold,
+    goldCompleted,
+    firstHadesUnlock,
+    usedCosmoBurst: report.usedCosmoBurst,
+    winCount: nextWinCount,
+  };
 }
 
 export function buildSaintSeiyaChest(args: {
@@ -250,6 +297,7 @@ export const useSaintSeiyaSanctuaryStore = create<SaintSeiyaSanctuaryState>()(
           startedAt: now,
           strategy: 'auto',
           report: null,
+          rewardApplied: false,
         };
         set({
           activeChest: null,
@@ -263,20 +311,47 @@ export const useSaintSeiyaSanctuaryStore = create<SaintSeiyaSanctuaryState>()(
         const state = get();
         const battle = state.battle;
         if (!battle) return { ...emptyBattleResult, levelBefore: saintLevelFromExp(state.totalExp), levelAfter: saintLevelFromExp(state.totalExp) };
-        const levelBefore = saintLevelFromExp(state.totalExp);
+        if (battle.report) {
+          return resultFromResolvedBattle({
+            state,
+            battle,
+            report: battle.report,
+            now,
+            alreadyApplied: Boolean(battle.rewardApplied),
+          });
+        }
         const report = simulateSaintBattle({
           totalExp: state.totalExp,
           collected: state.collected,
           enemy: battle.enemy,
           strategy,
         });
-        const nextTotalExp = Math.max(0, state.totalExp + report.expGain);
-        const levelAfter = saintLevelFromExp(nextTotalExp);
+        const resolvedBattle = { ...battle, strategy, report, rewardApplied: false };
+        set({
+          battle: resolvedBattle,
+        });
+        return resultFromResolvedBattle({ state, battle: resolvedBattle, report, now });
+      },
+
+      finalizeBattleReward(now = Date.now()) {
+        const state = get();
+        const battle = state.battle;
+        const report = battle?.report;
+        if (!battle || !report) {
+          return {
+            ...emptyBattleResult,
+            levelBefore: saintLevelFromExp(state.totalExp),
+            levelAfter: saintLevelFromExp(state.totalExp),
+            winCount: state.winCount,
+          };
+        }
+        if (battle.rewardApplied) {
+          return resultFromResolvedBattle({ state, battle, report, now, alreadyApplied: true });
+        }
+        const result = resultFromResolvedBattle({ state, battle, report, now });
         const cloth = SAINT_SEIYA_CLOTH_BY_ID[battle.chest.clothId];
-        const alreadyCollected = Boolean(state.collected[battle.chest.clothId]);
         const nextCollected = { ...state.collected };
-        const firstGold = report.victory && cloth?.rank === 'gold' && !alreadyCollected;
-        if (report.victory && cloth && !alreadyCollected) {
+        if (report.victory && cloth && !state.collected[cloth.id]) {
           nextCollected[cloth.id] = {
             clothId: cloth.id,
             rank: cloth.rank,
@@ -287,12 +362,13 @@ export const useSaintSeiyaSanctuaryStore = create<SaintSeiyaSanctuaryState>()(
         }
         const goldCompleted = hasAllGoldCloths(nextCollected);
         const firstHadesUnlock = goldCompleted && !state.hadesUnlockedAt;
+        const nextTotalExp = Math.max(0, state.totalExp + report.expGain);
         const nextWinCount = report.victory ? state.winCount + 1 : state.winCount;
         const nextCosmoBurstCount = report.usedCosmoBurst ? state.cosmoBurstCount + 1 : state.cosmoBurstCount;
-        const resolvedBattle = { ...battle, strategy, report };
+        const rewardedBattle = { ...battle, rewardApplied: true };
         set({
           collected: nextCollected,
-          battle: resolvedBattle,
+          battle: rewardedBattle,
           totalExp: nextTotalExp,
           battleCount: state.battleCount + 1,
           winCount: nextWinCount,
@@ -302,17 +378,11 @@ export const useSaintSeiyaSanctuaryStore = create<SaintSeiyaSanctuaryState>()(
           hadesAnimationUntil: firstHadesUnlock ? now + SAINT_SEIYA_HADES_ANIMATION_MS : state.hadesAnimationUntil,
         });
         return {
-          battle: resolvedBattle,
-          victory: report.victory,
-          clothId: report.victory ? battle.chest.clothId : null,
-          rank: report.victory ? battle.chest.rank : null,
-          expGain: report.expGain,
-          levelBefore,
-          levelAfter,
-          firstGold,
+          ...result,
+          battle: rewardedBattle,
+          levelAfter: saintLevelFromExp(nextTotalExp),
           goldCompleted,
           firstHadesUnlock,
-          usedCosmoBurst: report.usedCosmoBurst,
           winCount: nextWinCount,
         };
       },
@@ -325,7 +395,10 @@ export const useSaintSeiyaSanctuaryStore = create<SaintSeiyaSanctuaryState>()(
       setHadesModeActive(active) {
         if (!get().hadesUnlockedAt) return;
         if (get().hadesModeActive === active) return;
-        set({ hadesModeActive: active });
+        set({
+          hadesModeActive: active,
+          hadesAnimationUntil: active ? Date.now() + SAINT_SEIYA_HADES_ANIMATION_MS : get().hadesAnimationUntil,
+        });
       },
 
       resetSanctuary() {

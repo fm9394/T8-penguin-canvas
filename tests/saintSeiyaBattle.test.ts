@@ -33,18 +33,21 @@ compileSource('src/utils/saintSeiyaBattle.ts', 'src/utils/saintSeiyaBattle.js', 
 const cloths = await import(pathToFileURL(join(compiledRoot, 'src/data/saintSeiyaCloths.js')).href);
 const battle = await import(pathToFileURL(join(compiledRoot, 'src/utils/saintSeiyaBattle.js')).href);
 
-const { SAINT_SEIYA_GOLD_CLOTHS, SAINT_SEIYA_CLOTH_BY_ID } = cloths;
+const { SAINT_SEIYA_CLOTHS, SAINT_SEIYA_GOLD_CLOTHS, SAINT_SEIYA_CLOTH_BY_ID, SAINT_GOLD_CLOTH_UI } = cloths;
 const {
   buildEnemyStats,
   buildPlayerStats,
   chooseChestCloth,
   enemyLevelRange,
   hasAllGoldCloths,
+  goldTempleProgress,
   rankWeightsForLevel,
   rewardExpForRank,
   saintLevelFromExp,
   simulateSaintBattle,
   buildSaintEnemy,
+  saintMoveEffectStyle,
+  saintMoveSoundCue,
 } = battle;
 
 test('Saint Seiya battle math follows roadmap level and reward rules', () => {
@@ -75,7 +78,7 @@ test('Saint Seiya stats scale by cloth rank and enemy tier', () => {
   assert.ok(bronze.hp > bare.hp);
   assert.ok(silver.atk > bronze.atk);
   assert.ok(gold.def > silver.def);
-  assert.equal(gold.cosmoRegen, 5);
+  assert.equal(gold.cosmoRegen, 8);
 
   const bronzeEnemy = buildEnemyStats('bronze', 20);
   const goldEnemy = buildEnemyStats('gold', 80);
@@ -100,6 +103,41 @@ test('Saint Seiya chest selection excludes collected cloths and unlocks Hades af
   assert.equal(highLevelWeights.find((item) => item.rank === 'gold')?.weight, 60);
 });
 
+test('Saint Seiya gold temples progress in zodiac order from Aries to Pisces', () => {
+  const collected: Record<string, unknown> = {};
+  assert.equal(goldTempleProgress(collected).next.id, 'aries');
+  assert.equal(chooseChestCloth(980, collected, () => 0.92)?.id, 'aries');
+
+  collected.aries = { clothId: 'aries' };
+  assert.equal(goldTempleProgress(collected).next.id, 'taurus');
+  assert.equal(chooseChestCloth(980, collected, () => 0.92)?.id, 'taurus');
+
+  for (const cloth of SAINT_SEIYA_GOLD_CLOTHS) {
+    collected[cloth.id] = { clothId: cloth.id };
+  }
+  assert.equal(goldTempleProgress(collected).completed, 12);
+  assert.equal(goldTempleProgress(collected).next, null);
+});
+
+test('Saint Seiya twelve gold cloths have distinct UI effects', () => {
+  assert.equal(Object.keys(SAINT_GOLD_CLOTH_UI).length, SAINT_SEIYA_GOLD_CLOTHS.length);
+  const effects = new Set<string>();
+  const patterns = new Set<string>();
+  for (const cloth of SAINT_SEIYA_GOLD_CLOTHS) {
+    const ui = SAINT_GOLD_CLOTH_UI[cloth.id];
+    assert.ok(ui, `${cloth.id} needs a gold cloth UI config`);
+    assert.equal(ui.temple, SAINT_SEIYA_GOLD_CLOTHS.findIndex((item: any) => item.id === cloth.id) + 1);
+    assert.ok(ui.glyph.length >= 1);
+    assert.ok(ui.sigil.length >= 3);
+    assert.ok(ui.effect.length >= 3);
+    assert.ok(ui.unlockText.includes('。'));
+    effects.add(ui.effect);
+    patterns.add(ui.pattern);
+  }
+  assert.equal(effects.size, 12);
+  assert.equal(patterns.size, 12);
+});
+
 test('Saint Seiya battle simulation can resolve a collected gold user against a gold saint', () => {
   const collected = {
     aries: { clothId: 'aries' },
@@ -120,4 +158,75 @@ test('Saint Seiya battle simulation can resolve a collected gold user against a 
   assert.ok(report.expGain === 15 || report.expGain === 9);
   assert.equal(report.usedCosmoBurst, true);
   assert.ok(report.log.some((line) => line.includes('小宇宙') || line.includes('星光灭绝') || line.includes('星屑旋转功')));
+  assert.equal(report.events.length, report.log.length);
+  assert.equal(report.events[0].kind, 'intro');
+  assert.ok(report.events.some((event) => event.kind === 'player-attack'));
+  assert.ok(report.events.some((event) => event.kind === 'enemy-attack'));
+  assert.ok(report.events.some((event) => event.kind === 'clash'));
+  assert.ok(report.events.some((event) => event.kind === (report.victory ? 'victory' : 'defeat')));
+  assert.ok(report.events.every((event) => event.playerMaxHp > 0 && event.enemyMaxHp > 0));
+  assert.ok(report.events.every((event) => event.text.length >= 8));
+});
+
+test('Saint Seiya battle events target a 20-30 second automatic duel rhythm', () => {
+  const collected = {
+    aries: { clothId: 'aries' },
+    leo: { clothId: 'leo' },
+    sagittarius: { clothId: 'sagittarius' },
+  };
+  const enemy = buildSaintEnemy('pisces', 99, () => 0.4);
+  const report = simulateSaintBattle({
+    totalExp: 980,
+    collected,
+    enemy,
+    strategy: 'auto',
+    rng: () => 0.8,
+  });
+  const projectedDurationMs = report.events.length * 820;
+  assert.equal(report.turns, 10);
+  assert.ok(report.events.length >= 30, `expected a cinematic queue, got ${report.events.length}`);
+  assert.ok(projectedDurationMs >= 20_000, `battle too short: ${projectedDurationMs}ms`);
+  assert.ok(projectedDurationMs <= 30_000, `battle too long: ${projectedDurationMs}ms`);
+  assert.ok(report.events.filter((event) => event.kind === 'clash').length >= 10);
+  assert.ok(report.events.filter((event) => event.kind === 'player-attack').length >= 8);
+  assert.ok(report.events.filter((event) => event.kind === 'enemy-attack').length >= 8);
+});
+
+test('Saint Seiya moves expose unique visual effect and sound cues for battle playback', () => {
+  const styles = new Set<string>();
+  const moveEffectIds = new Set<string>();
+  for (const cloth of SAINT_SEIYA_CLOTHS) {
+    for (const move of cloth.moves) {
+      const style = saintMoveEffectStyle(move, cloth);
+      const sound = saintMoveSoundCue(move, cloth);
+      assert.ok(style, `${cloth.id}/${move.id} needs an effect style`);
+      assert.ok(sound, `${cloth.id}/${move.id} needs a sound cue`);
+      styles.add(style);
+      moveEffectIds.add(`${cloth.id}-${move.id}-${style}`);
+    }
+  }
+  assert.ok(styles.size >= 14, `expected many effect families, got ${styles.size}`);
+  assert.ok(moveEffectIds.has('pegasus-pegasus-ryuseiken-meteor'));
+  assert.ok(moveEffectIds.has('dragon-rozanshoryuha-dragon'));
+  assert.ok(moveEffectIds.has('aquarius-aurora-execution-aurora'));
+  assert.ok(moveEffectIds.has('pisces-bloody-rose-rose'));
+});
+
+test('Saint Seiya auto battle prefers unlocked skills and ultimate moves', () => {
+  const collected = {
+    aries: { clothId: 'aries' },
+  };
+  const enemy = buildSaintEnemy('taurus', 99, () => 0.4);
+  const report = simulateSaintBattle({
+    totalExp: 980,
+    collected,
+    enemy,
+    strategy: 'auto',
+    rng: () => 0.8,
+  });
+
+  assert.equal(report.usedCosmoBurst, true);
+  assert.ok(report.log.some((line) => line.includes('星屑旋转功')));
+  const attackEvents = report.events.filter((event) => event.kind === 'player-attack' || event.kind === 'enemy-attack');
+  assert.ok(attackEvents.every((event) => event.effectId && event.effectStyle && event.soundCue));
 });

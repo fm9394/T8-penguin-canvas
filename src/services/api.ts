@@ -798,6 +798,9 @@ export interface AchievementUnlockedFilm {
   lockedText?: string;
   unavailableText?: string;
   playedSeconds?: number;
+  mediaUrl?: string;
+  mime?: string;
+  fileName?: string;
 }
 
 export interface AchievementProfile {

@@ -54,6 +54,17 @@ function checkFrontendAsset(prefix, ext) {
   }
 }
 
+function checkAchievementMedia() {
+  const mediaRoot = path.join(RES, 'resources', 'achievement-media');
+  const encryptedReward = path.join(mediaRoot, 'film-saint-seiya-01.mp4.t8media');
+  checkFile(encryptedReward);
+  for (const file of walkFiles(mediaRoot)) {
+    if (path.extname(file).toLowerCase() === '.mp4') {
+      failSecurity('achievement reward video must be encrypted before packaging:', file);
+    }
+  }
+}
+
 function listDir(p, indent = '    ') {
   if (!fs.existsSync(p)) return;
   for (const name of fs.readdirSync(p)) {
@@ -355,6 +366,7 @@ function main() {
   checkFile(path.join(RES, 'backend-enc', 'routes', 'parseHub.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'achievements.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'topaz.t8c'));
+  checkFile(path.join(RES, 'backend-enc', 'achievements', 'media.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'achievements', 'store.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'cloudUploads', 'settings.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'cloudUploads', 'uploader.t8c'));
@@ -393,6 +405,9 @@ function main() {
   checkFrontendAsset('soccer-tsubasa-burning-hero-', '.mid');
   checkFrontendAsset('dragonball-makafushigi-adventure-', '.mp3');
   checkFrontendAsset('dragonball-shenron-cha-la-head-cha-la-', '.mp3');
+  checkFrontendAsset('saint-seiya-pegasus-fantasy-', '.mp3');
+  checkFrontendAsset('saint-seiya-hades-last-holy-war-', '.mp3');
+  checkAchievementMedia();
 
   console.log('\n[3] 清除可能混入的明文后端源码:');
   nukePlainBackend();

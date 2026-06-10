@@ -150,6 +150,11 @@ const CANVAS_TUTORIALS = [
     bilibili: 'https://www.bilibili.com/video/BV1gSEA6GEDQ/',
     youtube: 'https://www.youtube.com/watch?v=-nmX9oB-MX',
   },
+  {
+    title: '教程第十弹（3D全景功能增强，Figma联动，支持阿里云Oss及腾讯云Cos，新增放置栏，修正新香蕉的模型映射，上传素材的上限从10M到20M，新增veo-omni模型，新增提示词模板系统及增强功能，comfyui支持remote模式，新增newapi分组令牌高级模式，LLM/VISIOIN节点支持流式删除，分类独立APIKEY支持删除功能，新增画布教程模块，支持上游文本联动生成节点@模式，即梦CLI模型补全，素材支持直接拖到浏览器外文件夹）',
+    bilibili: 'https://www.bilibili.com/video/BV1N9Eg6QEHs/',
+    youtube: 'https://www.youtube.com/watch?v=zIW7PbEWQAs',
+  },
 ];
 
 function InfiniteCanvasBootLoading() {

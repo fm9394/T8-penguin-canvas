@@ -88,6 +88,13 @@ export async function pollGrokOAuthLogin(payload: Record<string, any> = {}): Pro
   });
 }
 
+export async function completeGrokOAuthLogin(payload: Record<string, any> = {}): Promise<Record<string, any>> {
+  return requestJson<Record<string, any>>(`${BASE}/login/complete`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function logoutGrokOAuth(): Promise<Record<string, any>> {
   return requestJson<Record<string, any>>(`${BASE}/logout`, {
     method: 'POST',

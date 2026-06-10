@@ -2761,6 +2761,344 @@ html[data-theme-visual="op"] .t8-theme-music-toggle.is-playing {
   color: var(--t8-accent, #38bdf8);
 }
 
+.t8-achievement-film__player {
+  display: block;
+  width: 100%;
+  max-height: 190px;
+  margin-top: 8px;
+  border: 1px solid var(--t8-border, rgba(255, 255, 255, 0.14));
+  border-radius: 8px;
+  background: #020617;
+}
+
+.t8-achievement-theme-film .t8-achievement-film__player {
+  max-height: 150px;
+}
+
+.t8-achievement-film__stage-card {
+  width: 100%;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  border: 1px solid color-mix(in srgb, var(--achievement-accent, var(--t8-accent, #38bdf8)) 46%, var(--t8-border, transparent));
+  border-radius: 8px;
+  background:
+    radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--achievement-accent, var(--t8-accent, #38bdf8)) 22%, transparent), transparent 46%),
+    color-mix(in srgb, var(--t8-bg-panel-muted, rgba(255, 255, 255, 0.05)) 92%, transparent);
+  color: var(--t8-text-main, #f8fafc);
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.t8-achievement-film__stage-card:hover {
+  border-color: color-mix(in srgb, var(--achievement-accent, var(--t8-accent, #38bdf8)) 72%, var(--t8-border, transparent));
+  transform: translateY(-1px);
+}
+
+.t8-achievement-film__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.t8-achievement-film-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 10080;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  pointer-events: auto;
+  background:
+    radial-gradient(circle at 50% 46%, color-mix(in srgb, var(--t8-accent, #38bdf8) 20%, transparent), transparent 34%),
+    rgba(2, 6, 23, 0.9);
+}
+
+.t8-achievement-film-stage__panel {
+  position: relative;
+  width: min(1120px, calc(100vw - 56px));
+  max-height: calc(100vh - 56px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1.5px solid var(--t8-border-strong, rgba(255, 255, 255, 0.2));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--t8-bg-panel-elevated, #0f172a) 96%, transparent);
+  color: var(--t8-text-main, #f8fafc);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.52);
+}
+
+.t8-achievement-film-stage__aura {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 20% 0%, color-mix(in srgb, var(--t8-accent, #38bdf8) 22%, transparent), transparent 34%),
+    radial-gradient(circle at 82% 100%, color-mix(in srgb, var(--t8-warning, #facc15) 14%, transparent), transparent 34%);
+  opacity: 0.88;
+}
+
+.t8-achievement-film-stage__header,
+.t8-achievement-film-stage__footer {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-color: var(--t8-border, rgba(255, 255, 255, 0.12));
+}
+
+.t8-achievement-film-stage__header {
+  border-bottom: 1px solid var(--t8-border, rgba(255, 255, 255, 0.12));
+}
+
+.t8-achievement-film-stage__footer {
+  border-top: 1px solid var(--t8-border, rgba(255, 255, 255, 0.12));
+}
+
+.t8-achievement-film-stage__header span,
+.t8-achievement-film-stage__header em,
+.t8-achievement-film-stage__footer span {
+  display: block;
+  color: var(--t8-text-muted, rgba(226, 232, 240, 0.72));
+  font-size: 11px;
+  font-style: normal;
+}
+
+.t8-achievement-film-stage__header strong {
+  display: block;
+  margin-top: 3px;
+  font-size: clamp(18px, 2.2vw, 28px);
+  font-weight: 1000;
+}
+
+.t8-achievement-film-stage__player {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-height: min(68vh, 720px);
+  background: #020617;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-drawer__panel,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__panel {
+  --saint-achievement-ink: #211607;
+  --saint-achievement-muted: rgba(33, 22, 7, 0.72);
+  --saint-achievement-panel: #fff7dc;
+  --saint-achievement-card: rgba(255, 251, 235, 0.96);
+  --saint-achievement-card-strong: #fff1b7;
+  --saint-achievement-line: rgba(33, 22, 7, 0.62);
+  --saint-achievement-accent: #bf7f14;
+  --saint-achievement-cosmo: #087b86;
+  --t8-text-main: var(--saint-achievement-ink);
+  --t8-text-muted: var(--saint-achievement-muted);
+  --t8-bg-panel: var(--saint-achievement-panel);
+  --t8-bg-panel-elevated: var(--saint-achievement-card);
+  --t8-bg-panel-muted: rgba(255, 238, 180, 0.82);
+  --t8-border: var(--saint-achievement-line);
+  --t8-border-strong: #211607;
+  --t8-accent: var(--saint-achievement-accent);
+  --t8-accent-text: #211607;
+  --t8-warning: #d49d2d;
+  color: var(--saint-achievement-ink) !important;
+  border-color: #211607 !important;
+  background:
+    radial-gradient(circle at 80% 7%, rgba(255, 230, 138, 0.62), transparent 27%),
+    radial-gradient(circle at 14% 98%, rgba(39, 214, 223, 0.16), transparent 26%),
+    linear-gradient(180deg, #fff9df, #f3d989 48%, #fff5cf) !important;
+}
+
+html[data-theme-visual="saint-seiya"][data-theme-mode="dark"] .t8-achievement-drawer__panel,
+html[data-theme-visual="saint-seiya"][data-theme-mode="dark"] .t8-achievement-film-stage__panel {
+  --saint-achievement-ink: #fff7db;
+  --saint-achievement-muted: rgba(255, 247, 219, 0.78);
+  --saint-achievement-panel: #071226;
+  --saint-achievement-card: rgba(12, 24, 46, 0.96);
+  --saint-achievement-card-strong: #142744;
+  --saint-achievement-line: rgba(255, 230, 138, 0.54);
+  --saint-achievement-accent: #ffe68a;
+  --saint-achievement-cosmo: #67e8f9;
+  --t8-border-strong: #ffe68a;
+  --t8-accent-text: #071226;
+  color: var(--saint-achievement-ink) !important;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(248, 200, 74, 0.22), transparent 30%),
+    radial-gradient(circle at 82% 94%, rgba(103, 232, 249, 0.16), transparent 28%),
+    linear-gradient(180deg, #081125, #0d1e38 48%, #071226) !important;
+}
+
+html[data-theme-visual="saint-seiya"][data-saint-mode="hades"] .t8-achievement-drawer__panel,
+html[data-theme-visual="saint-seiya"][data-saint-mode="hades"] .t8-achievement-film-stage__panel {
+  --saint-achievement-accent: #ffe68a;
+  --saint-achievement-cosmo: #67e8f9;
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255, 230, 138, 0.2), transparent 27%),
+    radial-gradient(circle at 50% 100%, rgba(183, 42, 89, 0.28), transparent 34%),
+    linear-gradient(180deg, #080b19, #16102a 50%, #090817) !important;
+}
+
+html[data-theme-visual="saint-seiya"][data-saint-mode="hades"]:not([data-theme-mode="dark"]) .t8-achievement-drawer__panel,
+html[data-theme-visual="saint-seiya"][data-saint-mode="hades"]:not([data-theme-mode="dark"]) .t8-achievement-film-stage__panel {
+  --saint-achievement-ink: #211607;
+  --saint-achievement-muted: rgba(33, 22, 7, 0.74);
+  --saint-achievement-card: rgba(255, 250, 229, 0.96);
+  --saint-achievement-line: rgba(33, 22, 7, 0.64);
+  --saint-achievement-accent: #9a5f09;
+  --saint-achievement-cosmo: #087b86;
+  --t8-accent-text: #211607;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(255, 255, 255, 0.58), transparent 22%),
+    radial-gradient(circle at 70% 70%, rgba(222, 74, 112, 0.18), transparent 28%),
+    linear-gradient(180deg, #fff8dd, #efd27b 52%, #fff1c3) !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-drawer__header,
+html[data-theme-visual="saint-seiya"] .t8-achievement-tabs,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__header,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__footer {
+  border-color: var(--saint-achievement-line) !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-drawer__header {
+  color: var(--saint-achievement-ink) !important;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--saint-achievement-accent) 64%, #fff8dc), color-mix(in srgb, var(--saint-achievement-cosmo) 22%, #fff1b7)) !important;
+}
+
+html[data-theme-visual="saint-seiya"][data-theme-mode="dark"] .t8-achievement-drawer__header,
+html[data-theme-visual="saint-seiya"][data-theme-mode="dark"] .t8-achievement-film-stage__header {
+  background:
+    linear-gradient(90deg, rgba(248, 200, 74, 0.2), rgba(103, 232, 249, 0.08), rgba(248, 200, 74, 0.14)) !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-drawer__title,
+html[data-theme-visual="saint-seiya"] .t8-achievement-drawer__subtitle,
+html[data-theme-visual="saint-seiya"] .t8-achievement-card__title,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-task-group h4,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film__title,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-task__top strong,
+html[data-theme-visual="saint-seiya"] .t8-achievement-medal__title strong,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__header strong {
+  color: var(--saint-achievement-ink) !important;
+  text-shadow: none !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-drawer__subtitle,
+html[data-theme-visual="saint-seiya"] .t8-achievement-kpis span,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-card__next,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film__condition,
+html[data-theme-visual="saint-seiya"] .t8-achievement-passport__top span,
+html[data-theme-visual="saint-seiya"] .t8-achievement-review p,
+html[data-theme-visual="saint-seiya"] .t8-achievement-review__grid span,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-detail__kpis span,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-task__body p,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-task__meta,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-task__hint,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-showcase p,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-showcase__head span,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-showcase__foot,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__header span,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__header em,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__footer span {
+  color: var(--saint-achievement-muted) !important;
+  text-shadow: none !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-kpis > div,
+html[data-theme-visual="saint-seiya"] .t8-achievement-card,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-card,
+html[data-theme-visual="saint-seiya"] .t8-achievement-medal,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-detail__kpis > div,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-next,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-task,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-film,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-showcase,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-showcase__grid > div,
+html[data-theme-visual="saint-seiya"] .t8-achievement-review__grid > div {
+  color: var(--saint-achievement-ink) !important;
+  border-color: var(--saint-achievement-line) !important;
+  background: var(--saint-achievement-card) !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-tabs button,
+html[data-theme-visual="saint-seiya"] .t8-achievement-back,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film__stage-card,
+html[data-theme-visual="saint-seiya"] .t8-achievement-passport__themes button,
+html[data-theme-visual="saint-seiya"] .t8-achievement-task {
+  color: var(--saint-achievement-ink) !important;
+  border-color: var(--saint-achievement-line) !important;
+  background: color-mix(in srgb, var(--saint-achievement-card-strong) 78%, transparent) !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-tabs button.is-active,
+html[data-theme-visual="saint-seiya"] .t8-achievement-task:hover,
+html[data-theme-visual="saint-seiya"] .t8-achievement-passport__themes button.is-complete {
+  color: var(--t8-accent-text, #211607) !important;
+  border-color: var(--saint-achievement-line) !important;
+  background: linear-gradient(180deg, var(--saint-achievement-cosmo), var(--saint-achievement-accent)) !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-progress {
+  background: color-mix(in srgb, var(--saint-achievement-ink) 12%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--saint-achievement-line) 70%, transparent);
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-progress span,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-showcase__grid strong,
+html[data-theme-visual="saint-seiya"] .t8-achievement-theme-detail__kpis strong,
+html[data-theme-visual="saint-seiya"] .t8-achievement-passport__top strong,
+html[data-theme-visual="saint-seiya"] .t8-achievement-film__status {
+  color: var(--saint-achievement-accent) !important;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage {
+  background:
+    radial-gradient(circle at 50% 47%, rgba(248, 200, 74, 0.24), transparent 22%),
+    radial-gradient(circle at 50% 48%, transparent 0 30%, rgba(103, 232, 249, 0.13) 31% 36%, transparent 37%),
+    linear-gradient(rgba(255, 230, 138, 0.12) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 230, 138, 0.12) 1px, transparent 1px),
+    rgba(2, 5, 18, 0.92);
+  background-size: auto, auto, 52px 52px, 52px 52px, auto;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__panel {
+  box-shadow:
+    0 0 0 3px rgba(255, 247, 219, 0.16),
+    0 0 70px rgba(248, 200, 74, 0.28),
+    0 30px 110px rgba(0, 0, 0, 0.62);
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__aura {
+  background:
+    conic-gradient(from -20deg at 50% 50%, transparent 0 18deg, rgba(248, 200, 74, 0.18) 20deg 24deg, transparent 26deg 56deg, rgba(103, 232, 249, 0.12) 58deg 62deg, transparent 64deg 100deg),
+    radial-gradient(circle at 50% 48%, rgba(248, 200, 74, 0.18), transparent 32%);
+  animation: t8-achievement-saint-cosmo 8s linear infinite;
+}
+
+html[data-theme-visual="saint-seiya"] .t8-achievement-film-stage__player {
+  min-height: min(58vw, 580px);
+  border-top: 1px solid var(--saint-achievement-line);
+  border-bottom: 1px solid var(--saint-achievement-line);
+  background: #020617;
+}
+
+@keyframes t8-achievement-saint-cosmo {
+  from {
+    transform: rotate(0deg) scale(1.02);
+  }
+  to {
+    transform: rotate(360deg) scale(1.02);
+  }
+}
+
 .t8-achievement-back {
   min-height: 30px;
   display: inline-flex;

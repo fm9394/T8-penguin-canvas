@@ -138,6 +138,13 @@
         ]
       },
       {
+        "from": "resources/achievement-media",
+        "to": "resources/achievement-media",
+        "filter": [
+          "*.t8media"
+        ]
+      },
+      {
         "from": "tools/runtime-archives",
         "to": "tools/runtime-archives",
         "filter": [

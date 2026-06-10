@@ -107,6 +107,28 @@ test('canvas exposes Figma send, placement shelf, and external file drag protoco
   assert.match(canvas, /canvasPanLocked \? false : \[0\]/);
   assert.match(canvas, /stopRadialPointerEvent/);
   assert.match(canvas, /window\.addEventListener\('mousemove', onMouseMove, true\)/);
+  assert.match(canvas, /Let the real paste event fire first/);
+  assert.match(canvas, /screenshots\/files must win/);
+  assert.match(canvas, /internalClipboardCopiedAtRef\.current = Date\.now\(\)/);
+  assert.match(canvas, /mediaSignature/);
+  assert.match(canvas, /shouldReleaseConsumedExternalMedia/);
+  assert.match(canvas, /internalClipboardCopiedAtRef\.current > last\.at/);
+  assert.match(canvas, /internalClipboardCopiedAtRef\.current <= lastExternalPaste\.at/);
+  const externalPasteBranch = canvas.slice(
+    canvas.indexOf('const onPaste = (e: ClipboardEvent)'),
+    canvas.indexOf("window.addEventListener('paste', onPaste, true)"),
+  );
+  assert.ok(
+    externalPasteBranch.indexOf('shouldReleaseConsumedExternalMedia') <
+      externalPasteBranch.indexOf('window.clearTimeout(internalPasteTimerRef.current)'),
+    'consumed external clipboard media must release before cancelling internal node paste',
+  );
+  assert.match(canvas, /if \(internalPasteTimerRef\.current\) \{\s*window\.clearTimeout\(internalPasteTimerRef\.current\);/);
+  const pasteShortcutBranch = canvas.slice(
+    canvas.indexOf("matchesAnyShortcut(shortcuts['canvas.paste'], e)"),
+    canvas.indexOf("matchesAnyShortcut(shortcuts['canvas.duplicate'], e)"),
+  );
+  assert.equal(pasteShortcutBranch.includes('e.preventDefault()'), false);
   assert.match(canvas, /window\.t8pc\?\.dragFileOut/);
   assert.match(canvas, /file-drag-out-feedback/);
   assert.match(canvas, /检测到左键\+右键/);
@@ -206,8 +228,13 @@ test('topbar canvas tutorial panel replaces RH ApiKey shortcut in latest apps', 
   assert.match(app, /V8oCBhemmCQ/);
   assert.match(app, /BV1gSEA6GEDQ/);
   assert.match(app, /-nmX9oB-MX/);
+  assert.match(app, /教程第十弹/);
+  assert.match(app, /BV1N9Eg6QEHs/);
+  assert.match(app, /zIW7PbEWQAs/);
   assert.ok(app.indexOf('画布教程') < app.indexOf('最新应用'));
   assert.doesNotMatch(app, /获取 RH ApiKey/);
   assert.doesNotMatch(app, /enterprise-api\/consumerApi/);
   assert.match(features, /canvasTutorialTopbarPanel/);
+  assert.match(features, /教程第十弹/);
+  assert.match(features, /BV1N9Eg6QEHs/);
 });

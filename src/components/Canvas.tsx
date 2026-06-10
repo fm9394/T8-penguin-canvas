@@ -1738,7 +1738,8 @@ function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastCanvasPointerRef = useRef<{ x: number; y: number } | null>(null);
   const internalPasteTimerRef = useRef<number | null>(null);
-  const lastExternalMediaPasteRef = useRef<{ signature: string; at: number } | null>(null);
+  const internalClipboardCopiedAtRef = useRef(0);
+  const lastExternalMediaPasteRef = useRef<{ signature: string; mediaSignature: string; at: number } | null>(null);
 
   // 拖线到空白处的候选节点菜单(connection picker)
   const [picker, setPicker] = useState<{
@@ -3168,6 +3169,7 @@ function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
       incomingEdges: JSON.parse(JSON.stringify(incomingEdges)),
       outgoingEdges: JSON.parse(JSON.stringify(outgoingEdges)),
     };
+    internalClipboardCopiedAtRef.current = Date.now();
     setClipboardCount(sel.length);
   }, [nodes, edges]);
 
@@ -5847,6 +5849,22 @@ function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
       if (document.querySelector('.img-edit-overlay')) return;
       const files = collectCanvasMediaFiles(e.clipboardData);
       if (files.length === 0) return;
+      const mediaSignature = files
+        .map(canvasMediaFileKey)
+        .join('||');
+      const now = Date.now();
+      const last = lastExternalMediaPasteRef.current;
+      const shouldReleaseConsumedExternalMedia =
+        Boolean(
+          last?.mediaSignature === mediaSignature &&
+          clipboardRef.current?.nodes?.length &&
+          internalClipboardCopiedAtRef.current > last.at
+        );
+      if (shouldReleaseConsumedExternalMedia) {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       const pointerTarget = lastCanvasPointerRef.current
         ? document.elementFromPoint(lastCanvasPointerRef.current.x, lastCanvasPointerRef.current.y)
         : null;
@@ -5857,16 +5875,11 @@ function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
         window.clearTimeout(internalPasteTimerRef.current);
         internalPasteTimerRef.current = null;
       }
-      const signature = files
-        .map(canvasMediaFileKey)
-        .join('||');
-      const actionSignature = `${uploadTargetNodeId || 'new-upload-node'}::${signature}`;
-      const now = Date.now();
-      const last = lastExternalMediaPasteRef.current;
+      const actionSignature = `${uploadTargetNodeId || 'new-upload-node'}::${mediaSignature}`;
       e.preventDefault();
       e.stopPropagation();
       if (last?.signature === actionSignature && now - last.at < EXTERNAL_MEDIA_PASTE_DEDUPE_MS) return;
-      lastExternalMediaPasteRef.current = { signature: actionSignature, at: now };
+      lastExternalMediaPasteRef.current = { signature: actionSignature, mediaSignature, at: now };
       if (uploadTargetNodeId) {
         void replaceUploadNodeFromFiles(uploadTargetNodeId, files);
         return;
@@ -5951,12 +5964,18 @@ function CanvasInner({ onAddNodeRef, onInsertWorkflowRef }: CanvasInnerProps) {
         handlePaste(true);
       } else if (matchesAnyShortcut(shortcuts['canvas.paste'], e)) {
         if (!clipboardRef.current?.nodes?.length) return;
-        e.preventDefault();
+        // Let the real paste event fire first. Some browsers suppress clipboard
+        // files when Ctrl+V keydown is prevented, so screenshots/files must win
+        // over the in-memory node clipboard.
         if (internalPasteTimerRef.current) window.clearTimeout(internalPasteTimerRef.current);
         internalPasteTimerRef.current = window.setTimeout(() => {
           internalPasteTimerRef.current = null;
           const lastExternalPaste = lastExternalMediaPasteRef.current;
-          if (lastExternalPaste && Date.now() - lastExternalPaste.at < EXTERNAL_MEDIA_PASTE_DEDUPE_MS) return;
+          if (
+            lastExternalPaste &&
+            Date.now() - lastExternalPaste.at < EXTERNAL_MEDIA_PASTE_DEDUPE_MS &&
+            internalClipboardCopiedAtRef.current <= lastExternalPaste.at
+          ) return;
           handlePaste(false);
         }, INTERNAL_NODE_PASTE_DELAY_MS);
       } else if (matchesAnyShortcut(shortcuts['canvas.duplicate'], e)) {

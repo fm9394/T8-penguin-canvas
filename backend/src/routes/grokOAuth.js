@@ -203,6 +203,19 @@ router.post('/login/poll', async (req, res) => {
   }
 });
 
+router.post('/login/complete', async (req, res) => {
+  try {
+    const result = await runGrokHook('loginComplete', { body: req.body || {} });
+    if (!result?.handled) {
+      const fallback = await runGrokHook('loginPoll', { body: req.body || {} });
+      return sendHookJson(res, fallback);
+    }
+    return sendHookJson(res, result);
+  } catch (e) {
+    return res.status(500).json({ success: false, code: 'grok_oauth_login_complete_failed', error: e?.message || String(e) });
+  }
+});
+
 router.post('/logout', async (req, res) => {
   try {
     const result = await runGrokHook('logout', { body: req.body || {} });

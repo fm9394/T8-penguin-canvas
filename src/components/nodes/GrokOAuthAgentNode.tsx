@@ -19,6 +19,7 @@ import {
 import { PORT_COLOR } from '../../config/portTypes';
 import { useRunTrigger } from '../../hooks/useRunTrigger';
 import {
+  completeGrokOAuthLogin,
   generateGrokOAuthImage,
   generateGrokOAuthTts,
   getGrokOAuthStatus,
@@ -92,6 +93,10 @@ function buildPrompt(localPrompt: string, upstreamTexts: Material[], mentions: M
   return [upstreamText, resolvedLocal].filter(Boolean).join('\n\n').trim();
 }
 
+function isPrivateDisabledError(message: string) {
+  return String(message || '').includes(GROK_OAUTH_PRIVATE_DISABLED_MESSAGE);
+}
+
 const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
   const update = useUpdateNodeData(id);
   const d = (data || {}) as any;
@@ -104,6 +109,7 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
   const [statusLoading, setStatusLoading] = useState(false);
   const [streamingReply, setStreamingReply] = useState('');
   const [loginPolling, setLoginPolling] = useState(false);
+  const [manualCode, setManualCode] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const loginPollRef = useRef<number | null>(null);
 
@@ -129,6 +135,13 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
   const audioUrls = asStringArray(d.audioUrls || d.audioUrl);
   const outputText = String(d.outputText || d.reply || d.text || '');
   const error = String(d.error || '');
+  const oauthLoginUrl = String(d.oauthLoginUrl || '');
+  const oauthLoginSessionId = String(d.oauthLoginSessionId || '');
+  const statusMessage = loginPolling
+    ? '等待 Grok 授权；如果页面显示无法建立连接，请复制授权码粘贴到下方。'
+    : status?.loggedIn
+      ? `已登录 ${status.user || status.account || ''}`
+      : (status?.message || GROK_OAUTH_PRIVATE_DISABLED_MESSAGE);
 
   const accent = isPixel ? 'var(--px-mint)' : isLight ? '#10b981' : '#67e8f9';
   const bg = isPixel ? 'var(--px-surface)' : isLight ? '#ffffff' : 'rgba(7, 12, 24, 0.96)';
@@ -155,11 +168,18 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
     try {
       const next = await getGrokOAuthStatus();
       setStatus(next);
-      update({
+      const patch: Record<string, any> = {
         oauthAvailable: !!next.available,
         oauthLoggedIn: !!next.loggedIn,
         oauthMessage: next.message || '',
-      });
+      };
+      if (next.available && isPrivateDisabledError(error)) patch.error = '';
+      if (next.loggedIn) {
+        patch.oauthLoginUrl = '';
+        patch.oauthLoginSessionId = '';
+        patch.progressMessage = '';
+      }
+      update(patch);
     } catch (e: any) {
       const message = e?.message || String(e);
       setStatus({ available: false, loggedIn: false, message });
@@ -167,7 +187,7 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
     } finally {
       setStatusLoading(false);
     }
-  }, [update]);
+  }, [error, update]);
 
   useEffect(() => {
     void refreshStatus();
@@ -184,6 +204,8 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
         const result = await pollGrokOAuthLogin({ sessionId });
         if (result.loggedIn || result.status === 'success' || result.done) {
           setLoginPolling(false);
+          setManualCode('');
+          update({ oauthLoginUrl: '', oauthLoginSessionId: '', progressMessage: '', error: '' });
           await refreshStatus();
           logBus.success('Grok OAuth 登录完成', `grok:${id}`);
           return;
@@ -199,13 +221,19 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
 
   const handleLogin = useCallback(async () => {
     try {
-      update({ error: '' });
+      setManualCode('');
+      update({ error: '', progressMessage: '正在打开 Grok OAuth 授权页...' });
       const result = await startGrokOAuthLogin({});
       const loginUrl = result.loginUrl || result.url || result.verificationUriComplete || result.verification_url;
+      const sessionId = String(result.sessionId || result.deviceCode || result.state || '').trim();
+      update({
+        oauthLoginUrl: loginUrl || '',
+        oauthLoginSessionId: sessionId,
+        progressMessage: result.manualInstructions || '请在浏览器完成 Grok 授权；如果页面提示无法建立连接，请复制授权码粘贴回来。',
+      });
       if (loginUrl && typeof window !== 'undefined') {
         window.open(loginUrl, '_blank', 'noopener,noreferrer');
       }
-      const sessionId = String(result.sessionId || result.deviceCode || result.state || '').trim();
       if (sessionId) {
         startLoginPoll(sessionId);
       } else {
@@ -222,11 +250,48 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
     try {
       await logoutGrokOAuth();
       await refreshStatus();
-      update({ error: '' });
+      setManualCode('');
+      update({ error: '', oauthLoginUrl: '', oauthLoginSessionId: '', progressMessage: '' });
     } catch (e: any) {
       update({ error: e?.message || String(e) });
     }
   }, [refreshStatus, update]);
+
+  const handlePasteManualCode = useCallback(async () => {
+    try {
+      const text = await navigator.clipboard?.readText?.();
+      if (text) setManualCode(text.trim());
+    } catch {
+      update({ error: '浏览器不允许读取剪贴板，请手动 Ctrl+V 粘贴授权码。' });
+    }
+  }, [update]);
+
+  const handleCompleteLogin = useCallback(async () => {
+    const code = manualCode.replace(/\s+/g, '').trim();
+    if (!code) {
+      update({ error: '请先粘贴 Grok 页面显示的授权码。' });
+      return;
+    }
+    try {
+      update({ error: '', status: 'running', progressMessage: '正在提交 Grok 授权码...' });
+      const result = await completeGrokOAuthLogin({
+        sessionId: oauthLoginSessionId,
+        authorizationCode: code,
+      });
+      if (result.loggedIn || result.status === 'success' || result.done) {
+        setManualCode('');
+        setLoginPolling(false);
+        if (loginPollRef.current) window.clearTimeout(loginPollRef.current);
+        update({ status: 'idle', error: '', oauthLoginUrl: '', oauthLoginSessionId: '', progressMessage: 'Grok OAuth 登录完成。' });
+        await refreshStatus();
+        logBus.success('Grok OAuth 授权码登录完成', `grok:${id}`);
+        return;
+      }
+      update({ status: 'idle', progressMessage: result.message || '授权码已提交，正在等待登录完成...' });
+    } catch (e: any) {
+      update({ status: 'error', error: e?.message || String(e), progressMessage: '' });
+    }
+  }, [id, manualCode, oauthLoginSessionId, refreshStatus, update]);
 
   const setMaterialOrder = (newOrder: string[]) => update({ materialOrder: newOrder });
 
@@ -277,6 +342,13 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
     setStreamingReply('');
     update({ status: mode === 'chat' ? 'streaming' : 'running', error: '', progressMessage: '', requestId: '' });
     try {
+      const latestStatus = status || await getGrokOAuthStatus();
+      if (latestStatus.available === false || latestStatus.moduleEnabled === false) {
+        throw new Error(latestStatus.message || GROK_OAUTH_PRIVATE_DISABLED_MESSAGE);
+      }
+      if (!latestStatus.loggedIn) {
+        throw new Error('请先点击“登录 / 绑定”完成 Grok OAuth 授权。');
+      }
       const base = payloadBase();
       if (mode !== 'stt' && !base.prompt) {
         throw new Error('请填写 Prompt，或连接上游文本节点。');
@@ -350,7 +422,7 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
     } finally {
       abortRef.current = null;
     }
-  }, [d.audioUrl, d.chatModel, d.imageModel, d.imageResolution, d.language, d.outputFormat, d.ratio, d.sttModel, d.ttsModel, d.voiceId, handleVideoSubmit, id, isBusy, localPrompt, mode, orderedAudios, payloadBase, update]);
+  }, [d.audioUrl, d.chatModel, d.imageModel, d.imageResolution, d.language, d.outputFormat, d.ratio, d.sttModel, d.ttsModel, d.voiceId, handleVideoSubmit, id, isBusy, localPrompt, mode, orderedAudios, payloadBase, status, update]);
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
@@ -419,7 +491,7 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
         <div className="flex-1 min-w-0">
           <div className="font-bold text-sm">Grok OAuth Agent</div>
           <div className="text-[10px] truncate" style={{ color: subText }}>
-            {status?.loggedIn ? `已登录 ${status.user || status.account || ''}` : (status?.message || GROK_OAUTH_PRIVATE_DISABLED_MESSAGE)}
+            {statusMessage}
           </div>
         </div>
         <button type="button" className="nodrag rounded px-2 py-1 text-[10px]" style={{ background: surface, color: text, border: `1px solid ${border}` }} onClick={() => void refreshStatus()} title="刷新状态">
@@ -436,6 +508,53 @@ const GrokOAuthAgentNode = ({ id, data, selected }: NodeProps) => {
             <LogOut size={12} /> 退出
           </button>
         </div>
+
+        {(oauthLoginUrl || loginPolling || manualCode) && !status?.loggedIn && (
+          <div className="space-y-2 rounded p-2 text-[10px]" style={{ background: surfaceStrong, color: text, border: `1px solid ${border}` }}>
+            <div className="leading-relaxed" style={{ color: subText }}>
+              如果 Grok 页面显示“无法建立连接”，复制页面中的授权码，粘贴到这里完成绑定。
+            </div>
+            <div className="flex gap-2">
+              {oauthLoginUrl && (
+                <button
+                  type="button"
+                  className="nodrag flex-1 rounded px-2 py-1 font-bold"
+                  style={{ background: surface, color: text, border: `1px solid ${border}` }}
+                  onClick={() => window.open(oauthLoginUrl, '_blank', 'noopener,noreferrer')}
+                >
+                  打开授权页
+                </button>
+              )}
+              <button
+                type="button"
+                className="nodrag rounded px-2 py-1 font-bold"
+                style={{ background: surface, color: text, border: `1px solid ${border}` }}
+                onClick={() => void handlePasteManualCode()}
+              >
+                粘贴
+              </button>
+            </div>
+            <div className="flex gap-2">
+              <input
+                className="nodrag nowheel min-w-0 flex-1 rounded px-2 py-1 text-[11px] outline-none"
+                style={{ background: bg, color: text, border: `1px solid ${border}` }}
+                value={manualCode}
+                onChange={(e) => setManualCode(e.target.value)}
+                placeholder="粘贴 Grok 授权码"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="button"
+                className="nodrag rounded px-2 py-1 font-bold"
+                style={{ background: accent, color: isPixel ? 'var(--px-surface)' : '#031712', border: `1px solid ${accent}` }}
+                onClick={() => void handleCompleteLogin()}
+              >
+                完成授权
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-5 gap-1.5">
           {MODES.map((item) => {
