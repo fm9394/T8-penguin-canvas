@@ -17,3 +17,12 @@ services:
       T8_COMFYUI_ALLOW_REMOTE: "1"
     volumes:
       - ./userdata:/app/userdata
+    networks:
+      - comfyui
+      - apinetwork
+
+networks:
+  comfyui:
+    name: comfyui
+  apinetwork:
+    name: apinetwork
