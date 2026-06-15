@@ -5087,6 +5087,29 @@ html[data-theme-mode="light"] .artist-style-master-lightbox-backdrop {
   --asm-border-soft: rgba(30, 41, 59, 0.2);
 }
 
+html[data-theme-template] .artist-style-master-node,
+html[data-theme-template] .artist-style-master-modal,
+html[data-theme-template] .artist-style-master-lightbox-backdrop,
+html[data-theme-style] .artist-style-master-node,
+html[data-theme-style] .artist-style-master-modal,
+html[data-theme-style] .artist-style-master-lightbox-backdrop,
+html[data-theme-visual] .artist-style-master-node,
+html[data-theme-visual] .artist-style-master-modal,
+html[data-theme-visual] .artist-style-master-lightbox-backdrop {
+  --asm-bg: var(--t8-bg-node, #fff8e7);
+  --asm-panel: var(--t8-bg-panel, #fffdfa);
+  --asm-panel-strong: var(--t8-bg-panel-elevated, #f7df9d);
+  --asm-text: var(--t8-text-main, #172033);
+  --asm-muted: var(--t8-text-muted, #52616f);
+  --asm-border: var(--t8-border-strong, var(--t8-border, #1e293b));
+  --asm-border-soft: var(--t8-border, rgba(30, 41, 59, 0.2));
+  --asm-accent: var(--t8-accent, #14b8a6);
+  --asm-accent-strong: var(--t8-accent-hover, var(--t8-accent, #0f766e));
+  --asm-warm: var(--t8-warning, #f59e0b);
+  --asm-danger: var(--t8-danger, #dc2626);
+  --asm-shadow: var(--t8-shadow-panel, rgba(15, 23, 42, 0.24));
+}
+
 .artist-style-master-node {
   width: 480px;
   min-height: 620px;
@@ -5653,6 +5676,29 @@ html[data-theme-mode="light"] .anime-tag-master-lightbox-backdrop {
   --atm-muted: #476241;
   --atm-border: #1f2937;
   --atm-border-soft: rgba(31, 41, 55, 0.2);
+}
+
+html[data-theme-template] .anime-tag-master-node,
+html[data-theme-template] .anime-tag-master-modal,
+html[data-theme-template] .anime-tag-master-lightbox-backdrop,
+html[data-theme-style] .anime-tag-master-node,
+html[data-theme-style] .anime-tag-master-modal,
+html[data-theme-style] .anime-tag-master-lightbox-backdrop,
+html[data-theme-visual] .anime-tag-master-node,
+html[data-theme-visual] .anime-tag-master-modal,
+html[data-theme-visual] .anime-tag-master-lightbox-backdrop {
+  --atm-bg: var(--t8-bg-node, #f7fee7);
+  --atm-panel: var(--t8-bg-panel, #fbfff2);
+  --atm-panel-strong: var(--t8-bg-panel-elevated, #d9f99d);
+  --atm-text: var(--t8-text-main, #132012);
+  --atm-muted: var(--t8-text-muted, #476241);
+  --atm-border: var(--t8-border-strong, var(--t8-border, #1f2937));
+  --atm-border-soft: var(--t8-border, rgba(31, 41, 55, 0.2));
+  --atm-accent: var(--t8-accent, #84cc16);
+  --atm-accent-strong: var(--t8-accent-hover, var(--t8-accent, #4d7c0f));
+  --atm-blue: var(--t8-secondary, var(--t8-accent, #38bdf8));
+  --atm-danger: var(--t8-danger, #dc2626);
+  --atm-shadow: var(--t8-shadow-panel, rgba(15, 23, 42, 0.24));
 }
 
 .anime-tag-master-node {
