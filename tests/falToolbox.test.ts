@@ -71,7 +71,25 @@ test('Fal toolbox manifest normalizes configured tools and builds generic payloa
   assert.equal(manifest.schema, 't8-fal-toolbox-manifest');
   assert.equal(manifest.categories.some((category) => category.id === 'video-generation'), true);
   assert.equal(manifest.categories.some((category) => category.id === 'model-3d'), true);
-  assert.equal(listFalToolboxTools(manifest).length >= 43, true);
+  assert.equal(listFalToolboxTools(manifest).length >= 55, true);
+  const zhenzhenFalIds = [
+    'zhenzhen-bernini-r-video-fal',
+    'zhenzhen-bernini-r-edit-video-fal',
+    'zhenzhen-bernini-r-reference-edit-video-fal',
+    'zhenzhen-bernini-r-edit-image-fal',
+    'zhenzhen-luma-ray-v3.2-fal',
+    'zhenzhen-luma-ray-v3.2-image-to-video-fal',
+    'zhenzhen-luma-uni-1-v1-fal',
+    'zhenzhen-luma-uni-1-v1-max-fal',
+    'zhenzhen-luma-uni-1-v1-edit-fal',
+    'zhenzhen-luma-uni-1-v1-edit-max-fal',
+    'zhenzhen-bria-video-background-removal-v3-fal',
+    'zhenzhen-nemotron-asr-multilingual-fal',
+    'zhenzhen-bria-genfill-v2-fal',
+    'zhenzhen-luma-ray-v3.2-video-to-video-fal',
+    'zhenzhen-pixelcut-video-background-removal-fal',
+  ];
+  for (const id of zhenzhenFalIds) assert.ok(findFalToolboxToolById(manifest, id), id);
   assert.deepEqual(
     filterFalToolboxTools(manifest, { categoryId: 'video-generation', query: 'sora' }).map((tool) => tool.id),
     ['sora2-fal-text', 'sora2-fal-image'],
@@ -169,6 +187,200 @@ test('Fal toolbox manifest normalizes configured tools and builds generic payloa
   assert.equal((heygenPayload.payload as any).custom_avatar, undefined);
   assert.equal((heygenPayload.payload as any).custom_voice, undefined);
   assert.equal((heygenPayload.payload as any).caption, true);
+});
+
+test('Zhenzhen FAL tools mirror ComfyUI payload contracts', async () => {
+  const { FAL_TOOLBOX_MANIFEST } = await loadFalToolboxManifest();
+  const {
+    buildFalToolboxRunPayload,
+    findFalToolboxToolById,
+    normalizeFalToolboxManifest,
+  } = await loadFalToolboxUtils();
+
+  const manifest = normalizeFalToolboxManifest(FAL_TOOLBOX_MANIFEST);
+  const byId = (id: string) => {
+    const found = findFalToolboxToolById(manifest, id);
+    assert.ok(found, id);
+    return found!;
+  };
+
+  const berniniReference = byId('zhenzhen-bernini-r-video-fal');
+  const berniniReferencePayload = buildFalToolboxRunPayload(berniniReference, {
+    inputValues: {
+      prompt: 'cinematic move',
+      reference_image_urls: ['/files/input/ref1.png', '/files/input/ref2.png'],
+    },
+    userParamValues: {
+      aspect_ratio: '9:16',
+      acceleration: 'regular',
+      max_image_size: 848,
+      num_frames: 81,
+      frames_per_second: 16,
+      num_inference_steps: 30,
+      enable_prompt_expansion: false,
+      seed: 0,
+    },
+  });
+  assert.equal(berniniReferencePayload.endpoint, 'fal-ai/bernini-r/reference-to-video');
+  assert.equal(berniniReferencePayload.payload.prompt, 'cinematic move');
+  assert.equal(berniniReferencePayload.payload.aspect_ratio, '9:16');
+  assert.equal(berniniReferencePayload.payload.seed, undefined);
+  assert.deepEqual(berniniReferencePayload.payload.reference_image_urls, ['/files/input/ref1.png', '/files/input/ref2.png']);
+  assert.deepEqual(berniniReferencePayload.mediaFields.find((field) => field.key === 'reference_image_urls'), {
+    key: 'reference_image_urls',
+    kind: 'image',
+    multiple: true,
+    upload: true,
+    mediaMode: 'base64',
+  });
+
+  const berniniEditVideo = byId('zhenzhen-bernini-r-edit-video-fal');
+  const berniniEditVideoPayload = buildFalToolboxRunPayload(berniniEditVideo, {
+    inputValues: { prompt: 'make it cinematic', video_url: '/files/input/source.mp4' },
+    userParamValues: { num_frames: 81, seed: 0 },
+  });
+  assert.equal(berniniEditVideoPayload.endpoint, 'fal-ai/bernini-r/edit-video');
+  assert.equal(berniniEditVideoPayload.payload.video_url, '/files/input/source.mp4');
+  assert.deepEqual(berniniEditVideoPayload.mediaFields.find((field) => field.key === 'video_url'), {
+    key: 'video_url',
+    kind: 'video',
+    multiple: false,
+    upload: true,
+    mediaMode: 'url',
+  });
+
+  const berniniReferenceEditVideo = byId('zhenzhen-bernini-r-reference-edit-video-fal');
+  assert.equal(berniniReferenceEditVideo.endpoint, 'fal-ai/bernini-r/reference-edit-video');
+
+  const berniniEditImage = byId('zhenzhen-bernini-r-edit-image-fal');
+  const berniniEditImagePayload = buildFalToolboxRunPayload(berniniEditImage, {
+    inputValues: { prompt: 'Make the image more cinematic.', image_url: '/files/input/source.png' },
+    userParamValues: { max_image_size: 848, num_inference_steps: 30, seed: 0 },
+  });
+  assert.equal(berniniEditImagePayload.endpoint, 'fal-ai/bernini-r/edit-image');
+  assert.equal(berniniEditImagePayload.payload.image_url, '/files/input/source.png');
+  assert.deepEqual(berniniEditImagePayload.mediaFields.find((field) => field.key === 'image_url'), {
+    key: 'image_url',
+    kind: 'image',
+    multiple: false,
+    upload: true,
+    mediaMode: 'base64',
+  });
+
+  const lumaRayText = byId('zhenzhen-luma-ray-v3.2-fal');
+  const lumaRayTextPayload = buildFalToolboxRunPayload(lumaRayText, {
+    inputValues: { prompt: 'A smooth cinematic camera move.' },
+    userParamValues: { duration: '10s', resolution: '1080p', aspect_ratio: '21:9', loop: true },
+  });
+  assert.equal(lumaRayTextPayload.endpoint, 'luma/agent/ray/v3.2/text-to-video');
+  assert.equal(lumaRayTextPayload.payload.duration, '10s');
+  assert.equal(lumaRayTextPayload.payload.resolution, '1080p');
+  assert.equal(lumaRayTextPayload.payload.aspect_ratio, '21:9');
+  assert.equal(lumaRayTextPayload.payload.loop, true);
+
+  const lumaRayImage = byId('zhenzhen-luma-ray-v3.2-image-to-video-fal');
+  const lumaRayImagePayload = buildFalToolboxRunPayload(lumaRayImage, {
+    inputValues: { prompt: 'Animate the portrait.', image_url: '/files/input/start.png' },
+    userParamValues: {
+      keyframes_json: '["https://example.com/key.png"]',
+      keyframe_indexes_json: '[0]',
+    },
+  });
+  assert.equal(lumaRayImagePayload.endpoint, 'luma/agent/ray/v3.2/image-to-video');
+  assert.deepEqual(lumaRayImagePayload.payload.keyframes, ['https://example.com/key.png']);
+  assert.deepEqual(lumaRayImagePayload.payload.keyframe_indexes, [0]);
+
+  const lumaUniText = byId('zhenzhen-luma-uni-1-v1-fal');
+  const lumaUniTextPayload = buildFalToolboxRunPayload(lumaUniText, {
+    inputValues: { prompt: 'A product poster.' },
+    userParamValues: { output_format: 'png', style: 'auto', aspect_ratio: 'auto' },
+  });
+  assert.equal(lumaUniTextPayload.endpoint, 'luma/agent/uni-1/v1/text-to-image');
+  assert.equal(lumaUniTextPayload.payload.output_format, 'png');
+  assert.equal(lumaUniTextPayload.payload.aspect_ratio, undefined);
+
+  const lumaUniEditMax = byId('zhenzhen-luma-uni-1-v1-edit-max-fal');
+  const lumaUniEditMaxPayload = buildFalToolboxRunPayload(lumaUniEditMax, {
+    inputValues: { prompt: 'Change lighting.', image_url: '/files/input/edit.png' },
+    userParamValues: { output_format: 'jpeg', style: 'manga', aspect_ratio: '16:9' },
+  });
+  assert.equal(lumaUniEditMaxPayload.endpoint, 'luma/agent/uni-1/v1/max/edit');
+  assert.equal(lumaUniEditMaxPayload.payload.image_url, '/files/input/edit.png');
+  assert.equal(lumaUniEditMaxPayload.payload.output_format, 'jpeg');
+
+  const briaVideo = byId('zhenzhen-bria-video-background-removal-v3-fal');
+  const briaVideoPayload = buildFalToolboxRunPayload(briaVideo, {
+    inputValues: { video_url: '/files/input/source.mp4' },
+    userParamValues: {
+      background_color: 'Black',
+      preserve_audio: true,
+      output_container_and_codec: 'webm_vp9',
+    },
+  });
+  assert.equal(briaVideoPayload.endpoint, 'bria/video/background-removal/v3');
+  assert.equal(briaVideoPayload.payload.background_color, 'Black');
+  assert.equal(briaVideoPayload.payload.output_container_and_codec, 'webm_vp9');
+
+  const nemotron = byId('zhenzhen-nemotron-asr-multilingual-fal');
+  const nemotronPayload = buildFalToolboxRunPayload(nemotron, {
+    inputValues: { audio_url: '/files/input/speech.wav' },
+    userParamValues: { language: 'zh-CN', acceleration: 'high' },
+  });
+  assert.equal(nemotronPayload.endpoint, 'nvidia/nemotron-asr-multilingual/asr');
+  assert.equal(nemotronPayload.payload.language, 'zh-CN');
+  assert.equal(nemotron.outputSchema.some((output) => output.kind === 'text'), true);
+
+  const briaGenfill = byId('zhenzhen-bria-genfill-v2-fal');
+  const briaGenfillPayload = buildFalToolboxRunPayload(briaGenfill, {
+    inputValues: {
+      instruction: 'A beautiful colorful butterfly',
+      image_url: '/files/input/image.png',
+      mask_url: '/files/input/mask.png',
+    },
+    userParamValues: { seed: 5555, steps_num: 30, sync_mode: false },
+  });
+  assert.equal(briaGenfillPayload.endpoint, 'bria/genfill/v2');
+  assert.equal(briaGenfillPayload.payload.instruction, 'A beautiful colorful butterfly');
+  assert.equal(briaGenfillPayload.payload.mask_url, '/files/input/mask.png');
+
+  const rayVideoToVideo = byId('zhenzhen-luma-ray-v3.2-video-to-video-fal');
+  const rayVideoToVideoPayload = buildFalToolboxRunPayload(rayVideoToVideo, {
+    inputValues: { prompt: 'Watercolor animation.', video_url: '/files/input/clip.mp4' },
+    userParamValues: {
+      auto_controls: false,
+      edit_strength: 'flex_1',
+      controls_json: '{"motion":"soft"}',
+      keyframes_json: '["https://example.com/frame.png"]',
+      keyframe_indexes_json: '[12]',
+    },
+  });
+  assert.equal(rayVideoToVideoPayload.endpoint, 'luma/agent/ray/v3.2/video-to-video');
+  assert.equal(rayVideoToVideoPayload.payload.edit_strength, 'flex_1');
+  assert.deepEqual(rayVideoToVideoPayload.payload.controls, { motion: 'soft' });
+  assert.deepEqual(rayVideoToVideoPayload.payload.keyframe_indexes, [12]);
+
+  const pixelcut = byId('zhenzhen-pixelcut-video-background-removal-fal');
+  const pixelcutPayload = buildFalToolboxRunPayload(pixelcut, {
+    inputValues: { video_url: '/files/input/person.mp4' },
+    userParamValues: {
+      background: 'custom',
+      custom_r: 1,
+      custom_g: 2,
+      custom_b: 3,
+      output_format: 'mp4_h264',
+    },
+  });
+  assert.equal(pixelcutPayload.endpoint, 'pixelcut/video-background-removal');
+  assert.equal(pixelcutPayload.payload.background, 'custom');
+  assert.deepEqual(pixelcutPayload.payload.background_color, { r: 1, g: 2, b: 3 });
+
+  assert.throws(
+    () => buildFalToolboxRunPayload(rayVideoToVideo, {
+      inputValues: { prompt: 'bad json', video_url: '/files/input/clip.mp4' },
+      userParamValues: { controls_json: '{bad' },
+    }),
+    /不是有效 JSON/,
+  );
 });
 
 test('3D model preview supports common FAL model formats', () => {

@@ -734,6 +734,7 @@ export default function AchievementDrawer() {
       {cinematicFilm && (
         <div
           className="t8-achievement-film-stage"
+          data-film-theme={cinematicFilm.film.theme}
           role="dialog"
           aria-label={`${cinematicFilm.film.title} 奖励影片`}
           onClick={() => setCinematicFilm(null)}
@@ -742,7 +743,7 @@ export default function AchievementDrawer() {
             <div className="t8-achievement-film-stage__aura" aria-hidden="true" />
             <header className="t8-achievement-film-stage__header">
               <div>
-                <span>{cinematicFilm.film.theme}</span>
+                <span>{getAchievementTheme(cinematicFilm.film.theme).label}</span>
                 <strong>{cinematicFilm.film.title}</strong>
                 <em>{unlockedFilmStatusText(cinematicFilm.unlockedFilm)}</em>
               </div>

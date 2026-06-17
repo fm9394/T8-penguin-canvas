@@ -156,6 +156,11 @@ const AUDIO_RE = /\.(mp3|wav|ogg|m4a|flac|aac)(\?|$)/i;
 const TEXT_RE = /\.(txt|md|json|csv)(\?|$)/i;
 
 export const RH_TOOLBOX_ALL_CATEGORY_ID = 'all';
+export const RH_TOOLBOX_DEFAULT_POLL_INTERVAL_MS = 5000;
+export const RH_TOOLBOX_DEFAULT_POLL_TIMEOUT_MS = 60 * 60 * 1000;
+export const RH_TOOLBOX_DEFAULT_MAX_POLLS = Math.ceil(
+  RH_TOOLBOX_DEFAULT_POLL_TIMEOUT_MS / RH_TOOLBOX_DEFAULT_POLL_INTERVAL_MS,
+);
 
 export const RH_TOOLBOX_MAJOR_CATEGORIES: RhToolboxMajorCategory[] = [
   { id: 'image', name: '图像', description: '图像生成、编辑、修复和放大工具', order: 10 },
@@ -297,6 +302,257 @@ function cleanRhNodeId(value: unknown): string {
   return String(value ?? '').trim().replace(/^#/, '');
 }
 
+type RhToolboxMappingLike = {
+  key?: unknown;
+  rhNodeId?: unknown;
+  fieldName?: unknown;
+};
+
+function parseRhFieldData(value: unknown): any {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === 'object') return value;
+  const raw = String(value ?? '').trim();
+  if (!raw) return undefined;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
+}
+
+function numberFromUnknown(value: unknown): number | undefined {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function fieldOptionValue(option: any): string | number | undefined {
+  if (typeof option === 'string' || typeof option === 'number') return option;
+  if (option && typeof option === 'object') {
+    const value = option.value ?? option.label ?? option.name ?? option.title;
+    if (typeof value === 'string' || typeof value === 'number') return value;
+  }
+  return undefined;
+}
+
+const RH_TOOLBOX_KNOWN_FIELD_OPTIONS: Record<string, Array<string | number>> = {
+  aspectRatio: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '3:2', '2:3', '21:9', '9:21', '1:4', '4:1', '1:8', '8:1'],
+  aspect_ratio: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '3:2', '2:3', '21:9', '9:21'],
+  ratio: ['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4', '3:2', '2:3'],
+  resolution: ['1k', '2k', '4k', '8k'],
+  size: ['512', '768', '1024', '1280', '1536', '2048'],
+  mode: ['text2img', 'img2img'],
+  quality: ['low', 'medium', 'high', 'best'],
+  instanceType: ['default', 'plus', 'pro'],
+  instance_type: ['default', 'plus', 'pro'],
+  precision: ['fp16', 'fp32', 'bf16'],
+  scheduler: ['normal', 'karras', 'exponential', 'sgm_uniform', 'simple', 'ddim_uniform'],
+  sampler: ['euler', 'euler_ancestral', 'heun', 'dpm_2', 'dpm_2_ancestral', 'lms', 'dpmpp_2m', 'dpmpp_sde', 'ddim', 'uni_pc'],
+};
+
+function normalizeRhOptionList(candidate: unknown): Array<string | number> | undefined {
+  if (!Array.isArray(candidate)) return undefined;
+  const options = candidate.map(fieldOptionValue).filter((value): value is string | number => value !== undefined);
+  if (options.length <= 1) return undefined;
+  return Array.from(new Set(options.map((value) => String(value)))).map((value) => {
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) && String(numberValue) === value ? numberValue : value;
+  });
+}
+
+export function getRhToolboxNodeInfoFieldOptions(field: any): Array<string | number> | undefined {
+  const parsedFieldData = parseRhFieldData(field?.fieldData);
+  const candidates = [
+    field?.fieldData,
+    field?.options,
+    field?.list,
+    field?.values,
+    field?.enum,
+    field?.choices,
+    field?.items,
+    field?.selectOptions,
+    field?.dropdown,
+    field?.fieldValue,
+    parsedFieldData,
+    Array.isArray(parsedFieldData) ? parsedFieldData[0] : undefined,
+  ];
+  for (const candidate of candidates) {
+    const options = normalizeRhOptionList(candidate);
+    if (options?.length) return options;
+  }
+
+  const fieldName = getRhToolboxNodeInfoFieldName(field);
+  if (fieldName) {
+    const direct = RH_TOOLBOX_KNOWN_FIELD_OPTIONS[fieldName];
+    if (direct) return direct;
+    const lower = fieldName.toLowerCase();
+    for (const key of Object.keys(RH_TOOLBOX_KNOWN_FIELD_OPTIONS)) {
+      if (key.toLowerCase() === lower) return RH_TOOLBOX_KNOWN_FIELD_OPTIONS[key];
+    }
+  }
+  return undefined;
+}
+
+function rhNodeInfoFieldMeta(field: any): any {
+  const parsed = parseRhFieldData(field?.fieldData);
+  if (Array.isArray(parsed) && parsed[1] && typeof parsed[1] === 'object') return parsed[1];
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+  return {};
+}
+
+export function getRhToolboxNodeInfoFieldNodeId(field: any): string {
+  return cleanRhNodeId(field?.nodeId ?? field?.node_id ?? field?.id);
+}
+
+export function getRhToolboxNodeInfoFieldName(field: any): string {
+  return cleanText(field?.fieldName ?? field?.field_name ?? field?.name ?? field?.key);
+}
+
+export function getRhToolboxNodeInfoFieldLabel(field: any): string {
+  const name = getRhToolboxNodeInfoFieldName(field);
+  return cleanText(
+    field?.descriptionCn
+      ?? field?.description
+      ?? field?.descriptionEn
+      ?? field?.label
+      ?? field?.title
+      ?? field?.displayName
+      ?? name,
+    name,
+  );
+}
+
+export function getRhToolboxNodeInfoFieldDefaultValue(field: any, kind?: RhToolboxUserParamKind): string | number | boolean {
+  const raw = field?.fieldValue ?? field?.defaultValue ?? field?.value ?? '';
+  const resolved = Array.isArray(raw) ? raw[0] : raw;
+  const resolvedKind = kind || inferRhToolboxNodeInfoParamKind(field);
+  if (resolvedKind === 'number') {
+    const n = numberFromUnknown(resolved);
+    return n ?? String(resolved ?? '');
+  }
+  if (resolvedKind === 'boolean') {
+    return resolved === true || resolved === 'true' || resolved === 1 || resolved === '1';
+  }
+  if (resolved && typeof resolved === 'object') return '';
+  return String(resolved ?? '');
+}
+
+export function inferRhToolboxNodeInfoMediaKind(field: any): RhToolboxMediaKind {
+  const haystack = [
+    field?.fieldType,
+    field?.valueType,
+    field?.nodeName,
+    getRhToolboxNodeInfoFieldName(field),
+  ].map((value) => String(value ?? '')).join(' ').toLowerCase();
+  if (/\bvideo\b|movie|film|视频/.test(haystack)) return 'video';
+  if (/\baudio\b|sound|music|voice|音频|声音|音乐|语音/.test(haystack)) return 'audio';
+  if (/\bimage\b|\bimg\b|photo|picture|loadimage|图像|图片|照片/.test(haystack)) return 'image';
+  return 'text';
+}
+
+export function inferRhToolboxNodeInfoParamKind(field: any): RhToolboxUserParamKind {
+  const typeText = [
+    field?.fieldType,
+    field?.valueType,
+    field?.nodeName,
+    parseRhFieldData(field?.fieldData)?.[0],
+  ].map((value) => String(value ?? '')).join(' ').toUpperCase();
+  if (typeText.includes('BOOLEAN') || typeText.includes('BOOL')) return 'boolean';
+  if (
+    typeText.includes('NUMBER')
+    || typeText.includes('FLOAT')
+    || typeText.includes('DOUBLE')
+    || typeText.includes('INTEGER')
+    || /\bINT\b/.test(typeText)
+  ) {
+    return 'number';
+  }
+  if (typeText.includes('LIST') || typeText.includes('SELECT') || typeText.includes('DROPDOWN') || typeText.includes('ENUM')) return 'select';
+  if (getRhToolboxNodeInfoFieldOptions(field)?.length) return 'select';
+  return 'text';
+}
+
+function isRhNodeInfoPromptLikeField(field: any): boolean {
+  const text = [
+    getRhToolboxNodeInfoFieldName(field),
+    getRhToolboxNodeInfoFieldLabel(field),
+    field?.description,
+    field?.descriptionEn,
+    field?.label,
+    field?.title,
+    field?.displayName,
+  ].map((value) => String(value ?? '')).join(' ').toLowerCase();
+  return /prompt|positive|negative|caption|description|instruction|query|text|content|提示词|提示|正向|负向|文本|文字|描述|内容/.test(text);
+}
+
+export function isRhToolboxNodeInfoUserParamField(field: any): boolean {
+  const nodeId = getRhToolboxNodeInfoFieldNodeId(field);
+  const name = getRhToolboxNodeInfoFieldName(field);
+  if (!nodeId || !name) return false;
+  if (inferRhToolboxNodeInfoMediaKind(field) !== 'text') return false;
+  if (isRhNodeInfoPromptLikeField(field)) return false;
+  const kind = inferRhToolboxNodeInfoParamKind(field);
+  return kind === 'number' || kind === 'boolean' || kind === 'select';
+}
+
+function rhMappingSignature(row: RhToolboxMappingLike): string {
+  return `${cleanRhNodeId(row.rhNodeId)}::${cleanText(row.fieldName)}`;
+}
+
+function uniqueRhUserParamKey(base: string, used: Set<string>): string {
+  const cleaned = cleanId(base, 'param');
+  if (!used.has(cleaned)) {
+    used.add(cleaned);
+    return cleaned;
+  }
+  for (let index = 2; index < 999; index += 1) {
+    const next = `${cleaned}-${index}`;
+    if (!used.has(next)) {
+      used.add(next);
+      return next;
+    }
+  }
+  const next = `${cleaned}-${Date.now().toString(36)}`;
+  used.add(next);
+  return next;
+}
+
+export function inferRhToolboxUserParamsFromNodeInfoList(
+  fields: any[],
+  existingMappings: RhToolboxMappingLike[] = [],
+): RhToolboxUserParam[] {
+  const mapped = new Set(existingMappings.map(rhMappingSignature).filter((item) => item !== '::'));
+  const usedKeys = new Set(existingMappings.map((row) => cleanId(row.key, '')).filter(Boolean));
+  const out: RhToolboxUserParam[] = [];
+
+  for (const field of Array.isArray(fields) ? fields : []) {
+    if (!isRhToolboxNodeInfoUserParamField(field)) continue;
+    const nodeId = getRhToolboxNodeInfoFieldNodeId(field);
+    const name = getRhToolboxNodeInfoFieldName(field);
+    const signature = `${nodeId}::${name}`;
+    if (mapped.has(signature)) continue;
+    const kind = inferRhToolboxNodeInfoParamKind(field);
+    const meta = rhNodeInfoFieldMeta(field);
+    const options = kind === 'select' ? getRhToolboxNodeInfoFieldOptions(field) : undefined;
+    const param: RhToolboxUserParam = {
+      key: uniqueRhUserParamKey(`node-${nodeId}-${name}`, usedKeys),
+      label: getRhToolboxNodeInfoFieldLabel(field),
+      kind,
+      rhNodeId: nodeId,
+      fieldName: name,
+      defaultValue: getRhToolboxNodeInfoFieldDefaultValue(field, kind),
+      options,
+      min: kind === 'number' ? numberFromUnknown(meta.min) : undefined,
+      max: kind === 'number' ? numberFromUnknown(meta.max) : undefined,
+      step: kind === 'number' ? numberFromUnknown(meta.step) : undefined,
+      required: false,
+    };
+    out.push(param);
+    mapped.add(signature);
+  }
+
+  return out;
+}
+
 function sortByOrderThenTitle<T extends { order?: number; title?: string; name?: string; id: string }>(items: T[]): T[] {
   return items.slice().sort((a, b) => {
     const ao = Number.isFinite(a.order) ? Number(a.order) : 9999;
@@ -418,6 +674,13 @@ export function normalizeRhToolboxManifest(manifest: Partial<RhToolboxManifest> 
           .filter(Boolean) as RhToolboxUserParam[]
       : [];
     const webappId = cleanText(raw?.webappId);
+    const pollIntervalMs = Number.isFinite(raw?.runtime?.pollIntervalMs)
+      ? Math.max(1000, Number(raw.runtime.pollIntervalMs))
+      : RH_TOOLBOX_DEFAULT_POLL_INTERVAL_MS;
+    const minMaxPolls = Math.ceil(RH_TOOLBOX_DEFAULT_POLL_TIMEOUT_MS / Math.max(1, pollIntervalMs));
+    const maxPolls = Number.isFinite(raw?.runtime?.maxPolls)
+      ? Math.max(minMaxPolls, Math.floor(Number(raw.runtime.maxPolls)))
+      : minMaxPolls;
     tools.push({
       id,
       title: cleanText(raw?.title, id),
@@ -438,12 +701,8 @@ export function normalizeRhToolboxManifest(manifest: Partial<RhToolboxManifest> 
       userParams,
       runtime: {
         instanceType: cleanText(raw?.runtime?.instanceType),
-        pollIntervalMs: Number.isFinite(raw?.runtime?.pollIntervalMs)
-          ? Math.max(1000, Number(raw.runtime.pollIntervalMs))
-          : undefined,
-        maxPolls: Number.isFinite(raw?.runtime?.maxPolls)
-          ? Math.max(1, Math.floor(Number(raw.runtime.maxPolls)))
-          : undefined,
+        pollIntervalMs,
+        maxPolls,
         fetchAppInfo: raw?.runtime?.fetchAppInfo !== false,
       },
       ui: raw?.ui && typeof raw.ui === 'object'

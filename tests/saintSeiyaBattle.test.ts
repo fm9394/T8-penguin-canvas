@@ -230,3 +230,28 @@ test('Saint Seiya auto battle prefers unlocked skills and ultimate moves', () =>
   const attackEvents = report.events.filter((event) => event.kind === 'player-attack' || event.kind === 'enemy-attack');
   assert.ok(attackEvents.every((event) => event.effectId && event.effectStyle && event.soundCue));
 });
+
+test('Saint Seiya Hades radar keeps chest ping inside the minimap frame', () => {
+  const component = readFileSync(resolve(repoRoot, 'src/components/SaintSeiyaSanctuary.tsx'), 'utf8');
+  const css = readFileSync(resolve(repoRoot, 'src/styles/theme-saintseiya.css'), 'utf8');
+
+  assert.match(component, /\? 18 \+ activeChest\.mapX \* 0\.64/);
+  assert.match(component, /\? 24 \+ activeChest\.mapY \* 0\.48/);
+  assert.match(component, /Math\.max\(18, Math\.min\(82, minimapPingLeftRaw\)\)/);
+  assert.match(component, /Math\.max\(24, Math\.min\(72, minimapPingTopRaw\)\)/);
+  assert.match(css, /minimap-ping-layer[\s\S]*contain:\s*paint/);
+  assert.match(css, /minimap-ping-layer[\s\S]*clip-path:\s*inset\(0 round 14px\)/);
+  assert.match(css, /minimap-ping-layer\.is-hades \.t8-saint-sanctuary__ping[\s\S]*width:\s*30px/);
+  assert.match(css, /transform:\s*translate\(-50%, -50%\) scale\(0\.92\)/);
+  assert.match(css, /minimap-ping-layer\.is-hades \.t8-saint-sanctuary__ping\.is-opening[\s\S]*scale\(1\)/);
+});
+
+test('Saint Seiya node ports stay visible inside cloth box frames', () => {
+  const css = readFileSync(resolve(repoRoot, 'src/styles/theme-saintseiya.css'), 'utf8');
+
+  assert.match(css, /react-flow__node:not\(\.react-flow__node-groupBox\)[\s\S]*overflow:\s*visible !important/);
+  assert.match(css, /react-flow__node:not\(\.react-flow__node-groupBox\) > div,[\s\S]*overflow:\s*visible !important/);
+  assert.match(css, /react-flow__handle[\s\S]*z-index:\s*80 !important/);
+  assert.match(css, /react-flow__handle-left[\s\S]*left:\s*8px !important/);
+  assert.match(css, /react-flow__handle-right[\s\S]*right:\s*8px !important/);
+});

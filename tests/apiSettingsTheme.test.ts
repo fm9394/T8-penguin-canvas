@@ -105,6 +105,18 @@ test('ApiSettings cloud upload panels link to vendor consoles and secret key rem
   assert.match(apiSettingsSource, /阿里云 AccessKey Secret 只会在创建时显示一次/);
 });
 
+test('ApiSettings exposes custom task completion sound upload without bypassing theme classes', () => {
+  assert.match(apiSettingsSource, /任务完成提示音/);
+  assert.match(apiSettingsSource, /handleTaskCompletionSoundUpload/);
+  assert.match(apiSettingsSource, /uploadTaskCompletionSound/);
+  assert.match(apiSettingsSource, /resetTaskCompletionSound/);
+  assert.match(apiSettingsSource, /accept="audio\/\*,\.mp3,\.wav,\.ogg,\.m4a,\.aac,\.flac,\.webm"/);
+  assert.match(apiSettingsSource, /试听/);
+  assert.match(apiSettingsSource, /恢复默认/);
+  assert.match(apiSettingsSource, /t8-api-settings-section/);
+  assert.match(apiSettingsSource, /t8-api-settings-secondary-btn/);
+});
+
 test('Dragon Ball theme defaults to bundled mp3 music and packaging validates the asset', () => {
   const postBuild = readFileSync(new URL('../electron/_post_build.cjs', import.meta.url), 'utf8');
   const musicAsset = new URL('../src/assets/theme-music/dragonball-makafushigi-adventure.mp3', import.meta.url);
@@ -144,7 +156,12 @@ test('Saint Seiya theme defaults to bundled sanctuary and Hades mp3 music', () =
   assert.match(themeTemplateManagerSource, /visualStyle === 'saint-seiya'[\s\S]*hiddenUrl: saintSeiyaHadesThemeMusicUrl/);
   assert.match(postBuild, /checkFrontendAsset\('saint-seiya-pegasus-fantasy-', '\.mp3'\)/);
   assert.match(postBuild, /checkFrontendAsset\('saint-seiya-hades-last-holy-war-', '\.mp3'\)/);
+  assert.match(postBuild, /film-tech-01\.mp4\.t8media/);
+  assert.match(postBuild, /film-rh-01\.mp4\.t8media/);
+  assert.match(postBuild, /film-yyh-01\.mp4\.t8media/);
+  assert.match(postBuild, /film-dragon-ball-01\.mp4\.t8media/);
   assert.match(postBuild, /film-saint-seiya-01\.mp4\.t8media/);
+  assert.match(postBuild, /film-tetris-01\.mp4\.t8media/);
   assert.match(featuresSource, /"saint-seiya-style": "saint-seiya-pegasus-fantasy\.mp3"/);
   assert.match(featuresSource, /"saint-seiya-hades-hidden": "saint-seiya-hades-last-holy-war\.mp3"/);
 });

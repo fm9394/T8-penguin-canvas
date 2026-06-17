@@ -56,8 +56,17 @@ function checkFrontendAsset(prefix, ext) {
 
 function checkAchievementMedia() {
   const mediaRoot = path.join(RES, 'resources', 'achievement-media');
-  const encryptedReward = path.join(mediaRoot, 'film-saint-seiya-01.mp4.t8media');
-  checkFile(encryptedReward);
+  const encryptedRewards = [
+    'film-tech-01.mp4.t8media',
+    'film-rh-01.mp4.t8media',
+    'film-yyh-01.mp4.t8media',
+    'film-dragon-ball-01.mp4.t8media',
+    'film-saint-seiya-01.mp4.t8media',
+    'film-tetris-01.mp4.t8media',
+  ];
+  for (const fileName of encryptedRewards) {
+    checkFile(path.join(mediaRoot, fileName));
+  }
   for (const file of walkFiles(mediaRoot)) {
     if (path.extname(file).toLowerCase() === '.mp4') {
       failSecurity('achievement reward video must be encrypted before packaging:', file);
@@ -311,6 +320,48 @@ function checkNoRhToolboxMaker() {
   console.log('  ✅ RH toolbox maker is not present in packaged resources');
 }
 
+function isFrontendBundleTextFile(p) {
+  const ext = path.extname(p).toLowerCase();
+  if (!['.json', '.js', '.mjs', '.html'].includes(ext)) return false;
+  try {
+    return fs.statSync(p).size <= 20 * 1024 * 1024;
+  } catch (_) {
+    return false;
+  }
+}
+
+function checkRhToolboxReleaseManifest() {
+  const frontendRoot = path.join(RES, 'frontend');
+  if (!fs.existsSync(frontendRoot)) {
+    failSecurity('frontend assets missing before RH toolbox release manifest check:', frontendRoot);
+  }
+  const requiredMarkers = [
+    'image-cutout-v1',
+    'tuantiquv10',
+    'bernini1',
+    'berninituxiangbianji',
+    'bernini2',
+    '2066002530877927426',
+    '2034251740148666369',
+    '2064192352843034626',
+    '2064222937024131073',
+    '2064185875537420290',
+  ];
+  const found = new Set();
+  for (const p of walkFiles(frontendRoot).filter(isFrontendBundleTextFile)) {
+    const text = fs.readFileSync(p, 'utf-8');
+    for (const marker of requiredMarkers) {
+      if (text.includes(marker)) found.add(marker);
+    }
+  }
+  for (const marker of requiredMarkers) {
+    if (!found.has(marker)) {
+      failSecurity(`RH toolbox release manifest marker missing from frontend assets: ${marker}`, frontendRoot);
+    }
+  }
+  console.log('  ✅ RH toolbox release manifest is bundled in frontend assets');
+}
+
 function checkNoFalToolboxMaker() {
   const forbiddenDirs = [
     path.join(RES, 'tools', 'fal-toolbox-maker'),
@@ -361,6 +412,8 @@ function main() {
   checkFile(path.join(RES, 'backend-enc', 'routes', 'themes.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'eagle.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'figma.t8c'));
+  checkFile(path.join(RES, 'backend-enc', 'routes', 'grokOAuth.t8c'));
+  checkFile(path.join(RES, 'backend-enc', 'routes', 'codexCli.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'aiWatermark.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'cloudUploads.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'routes', 'parseHub.t8c'));
@@ -384,6 +437,7 @@ function main() {
   checkFile(path.join(RES, 'backend-enc', 'tools', 'aiWatermark', 'media.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'tools', 'topaz', 'runner.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'utils', 'duckPayload.t8c'));
+  checkFile(path.join(RES, 'backend-enc', 'utils', 'codexCliRunner.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'utils', 'figmaBridge.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'utils', 'parseHubBridge.t8c'));
   checkFile(path.join(RES, 'backend-enc', 'utils', 'runtimeArchive.t8c'));
@@ -430,13 +484,16 @@ function main() {
   console.log('\n[9] RH工具箱制作器分发检查:');
   checkNoRhToolboxMaker();
 
-  console.log('\n[10] FAL应用制作工具分发检查:');
+  console.log('\n[10] RH工具箱发布清单分发检查:');
+  checkRhToolboxReleaseManifest();
+
+  console.log('\n[11] FAL应用制作工具分发检查:');
   checkNoFalToolboxMaker();
 
-  console.log('\n[11] GitHub 自动更新资产:');
+  console.log('\n[12] GitHub 自动更新资产:');
   checkUpdateArtifacts();
 
-  console.log('\n[12] resources/ 完整结构:');
+  console.log('\n[13] resources/ 完整结构:');
   listDir(RES);
 
   if (missingCount > 0) {

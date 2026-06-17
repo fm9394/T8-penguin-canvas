@@ -498,6 +498,14 @@ export default function SaintSeiyaSanctuary({ visualStyle, viewportMoving, nodeD
     const result = finalizeBattleReward();
     if (!result.battle) return;
     const cloth = result.clothId ? SAINT_SEIYA_CLOTH_BY_ID[result.clothId] : null;
+    if (hadesModeActive) {
+      trackAchievementEvent({
+        type: 'hidden_mode.used',
+        theme: 'saint-seiya',
+        kind: 'saint-seiya-hades',
+        mode: 'used',
+      });
+    }
     if (result.victory && cloth) {
       trackAchievementEvent({
         type: 'saint_seiya.cloth_collected',
@@ -517,14 +525,6 @@ export default function SaintSeiyaSanctuary({ visualStyle, viewportMoving, nodeD
         theme: 'saint-seiya',
         kind: result.rank || 'unknown',
       });
-      if (hadesModeActive) {
-        trackAchievementEvent({
-          type: 'hidden_mode.used',
-          theme: 'saint-seiya',
-          kind: 'saint-seiya-hades',
-          mode: 'used',
-        });
-      }
     }
     if (result.usedCosmoBurst) {
       trackAchievementEvent({
@@ -697,8 +697,22 @@ export default function SaintSeiyaSanctuary({ visualStyle, viewportMoving, nodeD
   const playerMpMax = latestBattleEvent?.playerMaxMp ?? battle?.report?.playerMaxMp ?? 1;
   const unlockCloth = clothUnlock ? SAINT_SEIYA_CLOTH_BY_ID[clothUnlock.clothId] : null;
   const unlockGoldUi = unlockCloth?.rank === 'gold' ? SAINT_GOLD_CLOTH_UI[unlockCloth.id] : null;
-  const minimapPingLeft = activeChest ? Math.max(8, Math.min(92, activeChest.mapX)) : 50;
-  const minimapPingTop = activeChest ? Math.max(24, Math.min(92, 18 + activeChest.mapY * 0.74)) : 50;
+  const minimapPingLeftRaw = activeChest
+    ? hadesModeActive
+      ? 18 + activeChest.mapX * 0.64
+      : activeChest.mapX
+    : 50;
+  const minimapPingTopRaw = activeChest
+    ? hadesModeActive
+      ? 24 + activeChest.mapY * 0.48
+      : activeChest.mapY
+    : 50;
+  const minimapPingLeft = hadesModeActive
+    ? Math.max(18, Math.min(82, minimapPingLeftRaw))
+    : Math.max(8, Math.min(92, minimapPingLeftRaw));
+  const minimapPingTop = hadesModeActive
+    ? Math.max(24, Math.min(72, minimapPingTopRaw))
+    : Math.max(8, Math.min(92, minimapPingTopRaw));
 
   return (
     <>
@@ -923,9 +937,27 @@ export default function SaintSeiyaSanctuary({ visualStyle, viewportMoving, nodeD
 
       {activeChest && chestCloth && (
         <div
-          className="t8-saint-sanctuary__minimap-ping-layer nodrag nopan"
+          className={`t8-saint-sanctuary__minimap-ping-layer nodrag nopan ${hadesModeActive ? 'is-hades' : 'is-sanctuary'}`}
           data-canvas-floating-ui="saint-seiya-minimap-ping"
+          data-saint-rank={activeChest.rank}
         >
+          {hadesModeActive && (
+            <>
+              <span className="t8-saint-hades-minimap__gate" aria-hidden="true" />
+              <span className="t8-saint-hades-minimap__river" aria-hidden="true" />
+              <span className="t8-saint-hades-minimap__orbit" aria-hidden="true" />
+              <span className="t8-saint-hades-minimap__scanner" aria-hidden="true" />
+              <span className="t8-saint-hades-minimap__athena" aria-hidden="true" />
+              <span className="t8-saint-hades-minimap__label" aria-hidden="true">HADES MAP</span>
+              <span className="t8-saint-hades-minimap__temples" aria-hidden="true">
+                {SAINT_SEIYA_GOLD_CLOTHS.map((cloth, index) => (
+                  <i key={cloth.id} style={{ '--saint-temple-index': index } as any}>
+                    {index + 1}
+                  </i>
+                ))}
+              </span>
+            </>
+          )}
           <button
             type="button"
             className={`t8-saint-sanctuary__ping is-${activeChest.rank} ${openingTarget?.chestId === activeChest.id ? 'is-opening' : ''}`}

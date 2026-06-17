@@ -9,10 +9,35 @@ const MAGIC = Buffer.from('T8MEDIA1');
 const KEY_SEED = 't8-penguin-canvas-achievement-media-v1';
 
 const MEDIA_BY_FILM_ID = {
+  'film-tech-01': {
+    encryptedFile: 'film-tech-01.mp4.t8media',
+    mime: 'video/mp4',
+    fileName: 'tech-hidden-reward.mp4',
+  },
+  'film-rh-01': {
+    encryptedFile: 'film-rh-01.mp4.t8media',
+    mime: 'video/mp4',
+    fileName: 'rh-hidden-reward.mp4',
+  },
+  'film-yyh-01': {
+    encryptedFile: 'film-yyh-01.mp4.t8media',
+    mime: 'video/mp4',
+    fileName: 'yyh-hidden-reward.mp4',
+  },
+  'film-dragon-ball-01': {
+    encryptedFile: 'film-dragon-ball-01.mp4.t8media',
+    mime: 'video/mp4',
+    fileName: 'dragon-ball-hidden-reward.mp4',
+  },
   'film-saint-seiya-01': {
     encryptedFile: 'film-saint-seiya-01.mp4.t8media',
     mime: 'video/mp4',
     fileName: 'saint-seiya-hades-reward.mp4',
+  },
+  'film-tetris-01': {
+    encryptedFile: 'film-tetris-01.mp4.t8media',
+    mime: 'video/mp4',
+    fileName: 'tetris-hidden-reward.mp4',
   },
 };
 

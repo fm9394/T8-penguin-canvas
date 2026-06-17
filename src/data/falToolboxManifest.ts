@@ -16,6 +16,25 @@ const heygenAvatar5Avatars = [heygenServerDefault, 'Abigail Sofa Front', 'Abigai
 const heygenAvatar5Voices = [heygenServerDefault, 'Warm Pro Narrator', 'Ann - IA', 'Chill Brian', 'Ivy'];
 const minimaxSpeechEmotions = ['none', 'happy', 'sad', 'angry', 'fearful', 'disgusted', 'surprised', 'neutral'];
 const minimaxSpeechLanguages = ['auto', 'English', 'Chinese', 'Chinese,Yue', 'Japanese', 'Korean', 'Spanish', 'French', 'Portuguese', 'German', 'Italian', 'Indonesian', 'Vietnamese', 'Thai'];
+const falSeedMax = 65535;
+const berniniAcceleration = ['none', 'regular'];
+const berniniVideoRatios = ['16:9', '9:16', '1:1'];
+const lumaRayRatios = ['3:4', '4:3', '1:1', '9:16', '16:9', '21:9'];
+const lumaRayDurations = ['5s', '10s'];
+const lumaRayResolutions = ['540p', '720p', '1080p'];
+const lumaUniRatios = ['auto', '3:1', '2:1', '16:9', '3:2', '1:1', '2:3', '9:16', '1:2', '1:3'];
+const lumaUniFormats = ['auto', 'png', 'jpeg'];
+const briaVideoBackgroundColors = ['Transparent', 'Black', 'White', 'Gray', 'Red', 'Green', 'Blue', 'Yellow', 'Cyan', 'Magenta', 'Orange'];
+const briaVideoCodecs = ['mp4_h265', 'mp4_h264', 'webm_vp9', 'mov_h265', 'mov_proresks', 'mkv_h265', 'mkv_h264', 'mkv_vp9', 'avi_h264', 'gif'];
+const nemotronAsrLanguages = [
+  'auto', 'en-US', 'en-GB', 'es-US', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'it-IT', 'ar-AR', 'ja-JP', 'ko-KR',
+  'pt-BR', 'pt-PT', 'ru-RU', 'hi-IN', 'zh-CN', 'vi-VN', 'he-IL', 'nl-NL', 'cs-CZ', 'da-DK', 'pl-PL', 'nn-NO',
+  'nb-NO', 'sv-SE', 'th-TH', 'tr-TR', 'bg-BG', 'el-GR', 'et-EE', 'fi-FI', 'hr-HR', 'hu-HU', 'lt-LT', 'lv-LV',
+  'ro-RO', 'sk-SK', 'uk-UA', 'mt-MT', 'sl-SI',
+];
+const lumaRayEditStrengths = ['auto', 'adhere_1', 'adhere_2', 'adhere_3', 'flex_1', 'flex_2', 'flex_3', 'reimagine_1', 'reimagine_2', 'reimagine_3'];
+const pixelcutVideoBackgrounds = ['transparent', 'black', 'white', 'green', 'blue', 'magenta', 'custom'];
+const pixelcutVideoFormats = ['auto', 'webm_vp9', 'mp4_h264', 'mp4_h265', 'mov_proresks', 'mov_h265', 'mkv_h264', 'mkv_h265', 'mkv_vp9', 'gif'];
 
 const imageOutput: FalToolboxOutputMapping[] = [
   { key: 'images', label: '图像', kind: 'image', pathCandidates: ['images', 'data.images', 'image', 'data.image', 'image.url', 'url'] },
@@ -27,6 +46,10 @@ const videoOutput: FalToolboxOutputMapping[] = [
 
 const audioOutput: FalToolboxOutputMapping[] = [
   { key: 'audio', label: '音频', kind: 'audio', pathCandidates: ['audio', 'audios', 'data.audio', 'data.audios', 'audio.url', 'data.audio.url', 'audio_url', 'url'] },
+];
+
+const textOutput: FalToolboxOutputMapping[] = [
+  { key: 'output', label: '文本', kind: 'text', pathCandidates: ['output', 'data.output', 'text', 'data.text', 'transcript', 'data.transcript'] },
 ];
 
 const modelOutput: FalToolboxOutputMapping[] = [
@@ -65,6 +88,10 @@ function textParam(key: string, label: string, defaultValue = '', textarea = fal
   return { key, label, kind: textarea ? 'textarea' : 'text', defaultValue };
 }
 
+function jsonParam(key: string, label: string, payloadKey: string): FalToolboxUserParam {
+  return { ...textParam(key, label), payloadKey, parseJson: true, omitValues: [''] };
+}
+
 function tool(config: FalToolboxTool): FalToolboxTool {
   return config;
 }
@@ -72,7 +99,7 @@ function tool(config: FalToolboxTool): FalToolboxTool {
 export const FAL_TOOLBOX_MANIFEST: FalToolboxManifest = {
   schema: 't8-fal-toolbox-manifest',
   version: 2,
-  updatedAt: '2026-06-08',
+  updatedAt: '2026-06-13',
   categories: [
     { id: 'image-generation', name: '图像生成', description: 'FAL 文生图与通用出图模型', order: 10, icon: 'Image' },
     { id: 'image-edit', name: '图像编辑', description: '参考图编辑、换装、局部重绘和高清化', order: 20, icon: 'Paintbrush' },
@@ -123,6 +150,145 @@ export const FAL_TOOLBOX_MANIFEST: FalToolboxManifest = {
       outputSchema: imageOutput,
       runtime: falRuntime,
       ui: { accent: '#f59e0b', quickActionLabel: 'GPT2 Edit' },
+    }),
+    tool({
+      id: 'zhenzhen-luma-uni-1-v1-fal',
+      title: 'Luma Uni 1 v1 文生图',
+      description: 'Zhenzhen FAL：luma/agent/uni-1/v1/text-to-image，支持文本生成和最多 9 张参考图。',
+      categoryId: 'image-generation',
+      endpoint: 'luma/agent/uni-1/v1/text-to-image',
+      enabled: true,
+      order: 31,
+      capabilities: ['image.generate'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'A cinematic product poster.', upload: false }),
+        input('reference_image_urls', '参考图', 'image', { required: false, multiple: true, maxItems: 9 }),
+      ],
+      userParams: [
+        { ...selectParam('aspect_ratio', '比例', 'auto', lumaUniRatios), omitValues: ['auto'] },
+        selectParam('output_format', '格式', 'png', lumaUniFormats),
+        selectParam('style', '风格', 'auto', ['auto', 'manga']),
+        boolParam('enable_web_search', '启用 Web Search', false),
+      ],
+      outputSchema: imageOutput,
+      runtime: falRuntime,
+      ui: { accent: '#22c55e', quickActionLabel: 'Uni T' },
+    }),
+    tool({
+      id: 'zhenzhen-luma-uni-1-v1-max-fal',
+      title: 'Luma Uni 1 v1 Max 文生图',
+      description: 'Zhenzhen FAL：luma/agent/uni-1/v1/max，高质量文生图。',
+      categoryId: 'image-generation',
+      endpoint: 'luma/agent/uni-1/v1/max',
+      enabled: true,
+      order: 32,
+      capabilities: ['image.generate'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'A cinematic product poster.', upload: false }),
+        input('reference_image_urls', '参考图', 'image', { required: false, multiple: true, maxItems: 9 }),
+      ],
+      userParams: [
+        { ...selectParam('aspect_ratio', '比例', 'auto', lumaUniRatios), omitValues: ['auto'] },
+        selectParam('output_format', '格式', 'png', lumaUniFormats),
+        selectParam('style', '风格', 'auto', ['auto', 'manga']),
+        boolParam('enable_web_search', '启用 Web Search', false),
+      ],
+      outputSchema: imageOutput,
+      runtime: falRuntime,
+      ui: { accent: '#16a34a', quickActionLabel: 'Uni Max' },
+    }),
+    tool({
+      id: 'zhenzhen-bernini-r-edit-image-fal',
+      title: 'Bernini R 图像编辑',
+      description: 'Zhenzhen FAL：fal-ai/bernini-r/edit-image，接 1 张图按 Prompt 编辑。',
+      categoryId: 'image-edit',
+      endpoint: 'fal-ai/bernini-r/edit-image',
+      enabled: true,
+      order: 121,
+      capabilities: ['image.edit'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'Make the image more cinematic.', upload: false }),
+        input('image_url', '参考图', 'image'),
+      ],
+      userParams: [
+        { ...textParam('negative_prompt', 'Negative Prompt', '', true), omitValues: [''] },
+        numberParam('max_image_size', '最大边长', 848, 256, 1280, 8),
+        numberParam('num_inference_steps', '推理步数', 30, 1, 50),
+        boolParam('enable_prompt_expansion', '提示词扩展', false),
+        { ...numberParam('seed', 'Seed（0=随机）', 0, 0, falSeedMax), omitValues: [0] },
+      ],
+      outputSchema: imageOutput,
+      runtime: falRuntime,
+      ui: { accent: '#ec4899', quickActionLabel: 'Bernini I' },
+    }),
+    tool({
+      id: 'zhenzhen-luma-uni-1-v1-edit-fal',
+      title: 'Luma Uni 1 v1 图像编辑',
+      description: 'Zhenzhen FAL：luma/agent/uni-1/v1/edit，接 1 张图并可追加参考图。',
+      categoryId: 'image-edit',
+      endpoint: 'luma/agent/uni-1/v1/edit',
+      enabled: true,
+      order: 122,
+      capabilities: ['image.edit'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'Edit the image while preserving the subject.', upload: false }),
+        input('image_url', '编辑图', 'image', { sourceIndex: 0 }),
+        input('reference_image_urls', '参考图', 'image', { required: false, multiple: true, maxItems: 9, sourceIndex: 1 }),
+      ],
+      userParams: [
+        { ...selectParam('aspect_ratio', '比例', 'auto', lumaUniRatios), omitValues: ['auto'] },
+        selectParam('output_format', '格式', 'png', lumaUniFormats),
+        selectParam('style', '风格', 'auto', ['auto', 'manga']),
+      ],
+      outputSchema: imageOutput,
+      runtime: falRuntime,
+      ui: { accent: '#22c55e', quickActionLabel: 'Uni Edit' },
+    }),
+    tool({
+      id: 'zhenzhen-luma-uni-1-v1-edit-max-fal',
+      title: 'Luma Uni 1 v1 Max 图像编辑',
+      description: 'Zhenzhen FAL：luma/agent/uni-1/v1/max/edit，高质量图像编辑。',
+      categoryId: 'image-edit',
+      endpoint: 'luma/agent/uni-1/v1/max/edit',
+      enabled: true,
+      order: 123,
+      capabilities: ['image.edit'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'Edit the image while preserving the subject.', upload: false }),
+        input('image_url', '编辑图', 'image', { sourceIndex: 0 }),
+        input('reference_image_urls', '参考图', 'image', { required: false, multiple: true, maxItems: 9, sourceIndex: 1 }),
+      ],
+      userParams: [
+        { ...selectParam('aspect_ratio', '比例', 'auto', lumaUniRatios), omitValues: ['auto'] },
+        selectParam('output_format', '格式', 'png', lumaUniFormats),
+        selectParam('style', '风格', 'auto', ['auto', 'manga']),
+      ],
+      outputSchema: imageOutput,
+      runtime: falRuntime,
+      ui: { accent: '#15803d', quickActionLabel: 'Uni E Max' },
+    }),
+    tool({
+      id: 'zhenzhen-bria-genfill-v2-fal',
+      title: 'Bria GenFill v2 局部重绘',
+      description: 'Zhenzhen FAL：bria/genfill/v2，输入原图和遮罩后按 instruction 填充。',
+      categoryId: 'image-edit',
+      endpoint: 'bria/genfill/v2',
+      enabled: true,
+      order: 124,
+      capabilities: ['image.inpaint', 'image.edit'],
+      inputSchema: [
+        input('instruction', 'Instruction', 'text', { defaultValue: 'A beautiful colorful butterfly', upload: false }),
+        input('image_url', '原图', 'image', { sourceIndex: 0 }),
+        input('mask_url', '遮罩图', 'image', { sourceIndex: 1 }),
+      ],
+      userParams: [
+        numberParam('steps_num', '步数', 30, 20, 50),
+        boolParam('sync_mode', '同步模式', false),
+        { ...numberParam('seed', 'Seed（0=随机）', 5555, 0, falSeedMax), omitValues: [0] },
+      ],
+      outputSchema: imageOutput,
+      runtime: falRuntime,
+      ui: { accent: '#f97316', quickActionLabel: 'GenFill' },
     }),
     tool({
       id: 'ideogram-v4-fal',
@@ -427,6 +593,214 @@ export const FAL_TOOLBOX_MANIFEST: FalToolboxManifest = {
       outputSchema: imageOutput,
       runtime: falRuntime,
       ui: { accent: '#0ea5e9', quickActionLabel: 'Topaz图' },
+    }),
+    tool({
+      id: 'zhenzhen-bernini-r-video-fal',
+      title: 'Bernini R 参考图生视频',
+      description: 'Zhenzhen FAL：fal-ai/bernini-r/reference-to-video，使用参考图生成视频。',
+      categoryId: 'video-generation',
+      endpoint: 'fal-ai/bernini-r/reference-to-video',
+      enabled: true,
+      order: 181,
+      capabilities: ['video.generate', 'video.image-to-video'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'A cinematic subtle motion shot.', upload: false }),
+        input('reference_image_urls', '参考图', 'image', { multiple: true, maxItems: 5 }),
+      ],
+      userParams: [
+        { ...textParam('negative_prompt', 'Negative Prompt', '', true), omitValues: [''] },
+        numberParam('max_image_size', '最大边长', 848, 256, 1280, 8),
+        numberParam('num_frames', '帧数', 81, 5, 121, 4),
+        numberParam('frames_per_second', 'FPS', 16, 4, 30),
+        numberParam('num_inference_steps', '推理步数', 30, 1, 50),
+        selectParam('acceleration', '加速', 'none', berniniAcceleration),
+        selectParam('aspect_ratio', '比例', '16:9', berniniVideoRatios),
+        boolParam('enable_prompt_expansion', '提示词扩展', false),
+        { ...numberParam('seed', 'Seed（0=随机）', 0, 0, falSeedMax), omitValues: [0] },
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#d946ef', quickActionLabel: 'Bernini R' },
+    }),
+    tool({
+      id: 'zhenzhen-bernini-r-edit-video-fal',
+      title: 'Bernini R 视频编辑',
+      description: 'Zhenzhen FAL：fal-ai/bernini-r/edit-video，输入视频并按 Prompt 编辑。',
+      categoryId: 'video-generation',
+      endpoint: 'fal-ai/bernini-r/edit-video',
+      enabled: true,
+      order: 182,
+      capabilities: ['video.edit'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'A cinematic subtle motion shot.', upload: false }),
+        input('video_url', '源视频', 'video'),
+      ],
+      userParams: [
+        { ...textParam('negative_prompt', 'Negative Prompt', '', true), omitValues: [''] },
+        numberParam('max_image_size', '最大边长', 848, 256, 1280, 8),
+        numberParam('num_frames', '帧数', 81, 5, 121, 4),
+        numberParam('frames_per_second', 'FPS', 16, 4, 30),
+        numberParam('num_inference_steps', '推理步数', 30, 1, 50),
+        selectParam('acceleration', '加速', 'none', berniniAcceleration),
+        boolParam('enable_prompt_expansion', '提示词扩展', false),
+        { ...numberParam('seed', 'Seed（0=随机）', 0, 0, falSeedMax), omitValues: [0] },
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#c026d3', quickActionLabel: 'Bernini EV' },
+    }),
+    tool({
+      id: 'zhenzhen-bernini-r-reference-edit-video-fal',
+      title: 'Bernini R 参考视频编辑',
+      description: 'Zhenzhen FAL：fal-ai/bernini-r/reference-edit-video，源视频加参考图联合编辑。',
+      categoryId: 'video-generation',
+      endpoint: 'fal-ai/bernini-r/reference-edit-video',
+      enabled: true,
+      order: 183,
+      capabilities: ['video.edit', 'video.image-to-video'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'A cinematic subtle motion shot.', upload: false }),
+        input('video_url', '源视频', 'video'),
+        input('reference_image_urls', '参考图', 'image', { required: false, multiple: true, maxItems: 5 }),
+      ],
+      userParams: [
+        { ...textParam('negative_prompt', 'Negative Prompt', '', true), omitValues: [''] },
+        numberParam('max_image_size', '最大边长', 848, 256, 1280, 8),
+        numberParam('num_frames', '帧数', 81, 5, 121, 4),
+        numberParam('frames_per_second', 'FPS', 16, 4, 30),
+        numberParam('num_inference_steps', '推理步数', 30, 1, 50),
+        selectParam('acceleration', '加速', 'none', berniniAcceleration),
+        boolParam('enable_prompt_expansion', '提示词扩展', false),
+        { ...numberParam('seed', 'Seed（0=随机）', 0, 0, falSeedMax), omitValues: [0] },
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#a21caf', quickActionLabel: 'Bernini REV' },
+    }),
+    tool({
+      id: 'zhenzhen-luma-ray-v3.2-fal',
+      title: 'Luma Ray v3.2 文生视频',
+      description: 'Zhenzhen FAL：luma/agent/ray/v3.2/text-to-video，支持参考图数组和 keyframes JSON。',
+      categoryId: 'video-generation',
+      endpoint: 'luma/agent/ray/v3.2/text-to-video',
+      enabled: true,
+      order: 184,
+      capabilities: ['video.generate', 'video.text-to-video'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'A smooth cinematic camera move.', upload: false }),
+        input('reference_image_urls', '参考图', 'image', { required: false, multiple: true, maxItems: 4 }),
+      ],
+      userParams: [
+        selectParam('duration', '时长', '5s', lumaRayDurations),
+        selectParam('resolution', '清晰度', '720p', lumaRayResolutions),
+        selectParam('aspect_ratio', '比例', '16:9', lumaRayRatios),
+        boolParam('hdr', 'HDR', false),
+        boolParam('exr_export', 'EXR Export', false),
+        boolParam('loop', '循环', false),
+        jsonParam('keyframes_json', 'Keyframes JSON', 'keyframes'),
+        jsonParam('keyframe_indexes_json', 'Keyframe Indexes JSON', 'keyframe_indexes'),
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#0ea5e9', quickActionLabel: 'Ray T2V' },
+    }),
+    tool({
+      id: 'zhenzhen-luma-ray-v3.2-image-to-video-fal',
+      title: 'Luma Ray v3.2 图生视频',
+      description: 'Zhenzhen FAL：luma/agent/ray/v3.2/image-to-video，支持首尾帧、参考图和 keyframes JSON。',
+      categoryId: 'video-generation',
+      endpoint: 'luma/agent/ray/v3.2/image-to-video',
+      enabled: true,
+      order: 185,
+      capabilities: ['video.generate', 'video.image-to-video'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'A smooth cinematic camera move.', upload: false }),
+        input('image_url', '起始图', 'image', { sourceIndex: 0 }),
+        input('end_image_url', '结束图', 'image', { required: false, sourceIndex: 1 }),
+        input('reference_image_urls', '参考图', 'image', { required: false, multiple: true, maxItems: 4, sourceIndex: 2 }),
+      ],
+      userParams: [
+        selectParam('duration', '时长', '5s', lumaRayDurations),
+        selectParam('resolution', '清晰度', '720p', lumaRayResolutions),
+        selectParam('aspect_ratio', '比例', '16:9', lumaRayRatios),
+        boolParam('hdr', 'HDR', false),
+        boolParam('exr_export', 'EXR Export', false),
+        boolParam('loop', '循环', false),
+        jsonParam('keyframes_json', 'Keyframes JSON', 'keyframes'),
+        jsonParam('keyframe_indexes_json', 'Keyframe Indexes JSON', 'keyframe_indexes'),
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#0284c7', quickActionLabel: 'Ray I2V' },
+    }),
+    tool({
+      id: 'zhenzhen-luma-ray-v3.2-video-to-video-fal',
+      title: 'Luma Ray v3.2 视频转视频',
+      description: 'Zhenzhen FAL：luma/agent/ray/v3.2/video-to-video，支持视频重绘、起始图和 controls JSON。',
+      categoryId: 'video-generation',
+      endpoint: 'luma/agent/ray/v3.2/video-to-video',
+      enabled: true,
+      order: 186,
+      capabilities: ['video.edit'],
+      inputSchema: [
+        input('prompt', 'Prompt', 'text', { defaultValue: 'Restyle the footage as a hand-painted watercolor animation.', upload: false }),
+        input('video_url', '源视频', 'video'),
+        input('start_image_url', '起始图', 'image', { required: false }),
+      ],
+      userParams: [
+        selectParam('duration', '时长', '5s', lumaRayDurations),
+        selectParam('resolution', '清晰度', '720p', lumaRayResolutions),
+        boolParam('auto_controls', '自动控制', false),
+        { ...selectParam('edit_strength', '编辑强度', 'auto', lumaRayEditStrengths), omitValues: ['auto'], when: { key: 'auto_controls', equals: false } },
+        boolParam('hdr', 'HDR', false),
+        boolParam('exr_export', 'EXR Export', false),
+        { ...jsonParam('controls_json', 'Controls JSON', 'controls'), when: { key: 'auto_controls', equals: false } },
+        jsonParam('keyframes_json', 'Keyframes JSON', 'keyframes'),
+        jsonParam('keyframe_indexes_json', 'Keyframe Indexes JSON', 'keyframe_indexes'),
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#0369a1', quickActionLabel: 'Ray V2V' },
+    }),
+    tool({
+      id: 'zhenzhen-bria-video-background-removal-v3-fal',
+      title: 'Bria Video BG Removal v3',
+      description: 'Zhenzhen FAL：bria/video/background-removal/v3，视频去背景并可保留音频。',
+      categoryId: 'video-generation',
+      endpoint: 'bria/video/background-removal/v3',
+      enabled: true,
+      order: 187,
+      capabilities: ['video.background-removal'],
+      inputSchema: [input('video_url', '源视频', 'video')],
+      userParams: [
+        selectParam('background_color', '背景色', 'Transparent', briaVideoBackgroundColors),
+        boolParam('preserve_audio', '保留音频', true),
+        selectParam('output_container_and_codec', '封装/编码', 'mp4_h265', briaVideoCodecs),
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#14b8a6', quickActionLabel: 'Bria VBG' },
+    }),
+    tool({
+      id: 'zhenzhen-pixelcut-video-background-removal-fal',
+      title: 'Pixelcut 视频去背景',
+      description: 'Zhenzhen FAL：pixelcut/video-background-removal，支持透明、纯色和自定义 RGB 背景。',
+      categoryId: 'video-generation',
+      endpoint: 'pixelcut/video-background-removal',
+      enabled: true,
+      order: 188,
+      capabilities: ['video.background-removal'],
+      inputSchema: [input('video_url', '源视频', 'video')],
+      userParams: [
+        selectParam('background', '背景', 'transparent', pixelcutVideoBackgrounds),
+        selectParam('output_format', '输出格式', 'auto', pixelcutVideoFormats),
+        { ...numberParam('custom_r', '自定义 R', 0, 0, 255), payloadKey: 'background_color.r', when: { key: 'background', equals: 'custom' } },
+        { ...numberParam('custom_g', '自定义 G', 0, 0, 255), payloadKey: 'background_color.g', when: { key: 'background', equals: 'custom' } },
+        { ...numberParam('custom_b', '自定义 B', 0, 0, 255), payloadKey: 'background_color.b', when: { key: 'background', equals: 'custom' } },
+      ],
+      outputSchema: videoOutput,
+      runtime: longVideoRuntime,
+      ui: { accent: '#10b981', quickActionLabel: 'Pixelcut BG' },
     }),
     tool({
       id: 'veo3-1-fal',
@@ -783,6 +1157,24 @@ export const FAL_TOOLBOX_MANIFEST: FalToolboxManifest = {
       outputSchema: videoOutput,
       runtime: longVideoRuntime,
       ui: { accent: '#c084fc', quickActionLabel: 'Sora2 I2V' },
+    }),
+    tool({
+      id: 'zhenzhen-nemotron-asr-multilingual-fal',
+      title: 'Nemotron 多语言 ASR',
+      description: 'Zhenzhen FAL：nvidia/nemotron-asr-multilingual/asr，多语言语音转文字。',
+      categoryId: 'audio-tools',
+      endpoint: 'nvidia/nemotron-asr-multilingual/asr',
+      enabled: true,
+      order: 395,
+      capabilities: ['audio.asr'],
+      inputSchema: [input('audio_url', '输入音频', 'audio')],
+      userParams: [
+        selectParam('language', '语言', 'auto', nemotronAsrLanguages),
+        selectParam('acceleration', '加速', 'regular', ['none', 'regular', 'high', 'full']),
+      ],
+      outputSchema: textOutput,
+      runtime: falRuntime,
+      ui: { accent: '#22c55e', quickActionLabel: 'ASR' },
     }),
     tool({
       id: 'sonilo-video-to-music-fal',

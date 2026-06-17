@@ -44,6 +44,15 @@ const BANANA_PRO_RATIOS = ['Auto', '1:1', '16:9', '4:3', '4:5', '3:2', '2:3', '3
 // gpt-image-2-web Grok Image Tab 的比例集合,默认参考图传入方式为 Base64
 const GROK_IMAGE_RATIOS = ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3'];
 
+export const GPT_IMAGE_2_ZHENZHEN_SIZE_VARIANTS: Record<string, '2K' | '4K'> = {
+  'gpt-image-2-2K': '2K',
+  'gpt-image-2-4K': '4K',
+};
+
+export function gptImage2ZhenzhenVariantSize(apiModel: string | undefined | null): '2K' | '4K' | null {
+  return GPT_IMAGE_2_ZHENZHEN_SIZE_VARIANTS[String(apiModel || '').trim()] || null;
+}
+
 export const IMAGE_MODELS: ImageModelDef[] = [
   {
     id: 'gpt-image-2',
@@ -56,6 +65,8 @@ export const IMAGE_MODELS: ImageModelDef[] = [
     apiModelOptions: [
       { value: 'gpt-image-2-all', label: 'gpt-image-2-all' },
       { value: 'gpt-image-2', label: 'gpt-image-2' },
+      { value: 'gpt-image-2-2K', label: 'gpt-image-2-2K' },
+      { value: 'gpt-image-2-4K', label: 'gpt-image-2-4K' },
       { value: 'gpt-image-2-fal', label: 'gpt-image-2-fal' },
     ],
     aspectRatios: GPT_RATIOS,
@@ -359,6 +370,30 @@ export const SORA2_FAL_DURATIONS = [4, 8, 12, 16, 20];
 /** Sora2 FAL 分辨率(主项目 srf_resolution) */
 export const SORA2_FAL_RESOLUTIONS = ['720p', 'auto'];
 
+export const GROK_VIDEO_1_5_NEW_MODELS = [
+  'grok-1.5-video-6s',
+  'grok-1.5-video-10s',
+  'grok-1.5-video-15s',
+] as const;
+
+export type GrokVideo15NewModel = typeof GROK_VIDEO_1_5_NEW_MODELS[number];
+
+export const GROK_VIDEO_1_5_NEW_SIZES = [
+  { value: '1280x720', label: '横屏 1280x720' },
+  { value: '720x1280', label: '竖屏 720x1280' },
+] as const;
+
+export function isGrokVideo15NewModel(model: string): model is GrokVideo15NewModel {
+  return (GROK_VIDEO_1_5_NEW_MODELS as readonly string[]).includes(String(model || '').trim());
+}
+
+export function grokVideo15NewSizeFromRatio(ratioOrSize: string): '1280x720' | '720x1280' {
+  const value = String(ratioOrSize || '').trim();
+  if (value === '720x1280') return '720x1280';
+  if (value === '9:16') return '720x1280';
+  return '1280x720';
+}
+
 export interface VideoModelDef {
   id: string;                // 节点默认 model 字段(也是上游真实 model)
   label: string;             // 主选项显示名
@@ -408,8 +443,11 @@ export const VIDEO_MODELS: VideoModelDef[] = [
     provider: 'zhenzhen',
     description: 'xAI Grok Video (最多 7 张参考图)',
     apiModelOptions: [
+      { value: 'grok-video-3', label: 'grok-video-3（新版1.5）' },
+      { value: 'grok-1.5-video-6s', label: 'grok-1.5-video-6s（Zhenzhen New）' },
+      { value: 'grok-1.5-video-10s', label: 'grok-1.5-video-10s（Zhenzhen New）' },
+      { value: 'grok-1.5-video-15s', label: 'grok-1.5-video-15s（Zhenzhen New）' },
       { value: 'grok-imagine-video-1.5', label: 'Grok Video 1.5 (FAL)' },
-      { value: 'grok-video-3', label: 'grok-video-3' },
       { value: 'grok-video-fal', label: 'grok-video-fal (FAL)' },
     ],
     // 主项目 gk_ratio(line 1410): 2:3 / 3:2 / 16:9 / 9:16 / 1:1

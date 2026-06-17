@@ -19,16 +19,22 @@ import {
 } from 'lucide-react';
 import { PORT_COLOR } from '../../config/portTypes';
 import { useRunTrigger } from '../../hooks/useRunTrigger';
-import { uploadFile } from '../../services/generation';
+import { cancelRh, fetchRhAppInfo, uploadFile } from '../../services/generation';
 import { runRhToolboxTool, getRhToolboxManifest, type RunRhToolboxProgress } from '../../services/rhToolbox';
 import { useThemeStore } from '../../stores/theme';
 import { logBus } from '../../stores/logs';
+import { useRunBusStore } from '../../stores/runBus';
 import {
   RH_TOOLBOX_ALL_CATEGORY_ID,
   RH_TOOLBOX_CAPABILITY_LABELS,
   filterRhToolboxTools,
   getRhToolboxCategoryMajorId,
+  getRhToolboxNodeInfoFieldLabel,
+  getRhToolboxNodeInfoFieldName,
+  getRhToolboxNodeInfoFieldNodeId,
+  getRhToolboxNodeInfoFieldOptions,
   getRhToolboxToolMajorCategory,
+  inferRhToolboxUserParamsFromNodeInfoList,
   isRhToolboxBuiltinCategoryId,
   listRhToolboxTools,
   normalizeRhToolboxManifest,
@@ -78,6 +84,25 @@ function toolMatchesNodeSurface(tool: RhToolboxTool): boolean {
   return tool.ui?.showInNode !== false;
 }
 
+function rhToolboxDisplayIdentity(tool: RhToolboxTool): string {
+  const title = String(tool.title || '').trim().replace(/[\s\u200b-\u200f\ufeff]+/g, '').toLowerCase();
+  if (title) return `title:${title}`;
+  const webappId = String(tool.webappId || '').trim();
+  if (webappId) return `webapp:${webappId}`;
+  return `id:${tool.id}`;
+}
+
+function dedupeRhToolboxDisplayTools(tools: RhToolboxTool[]): RhToolboxTool[] {
+  const orderedKeys: string[] = [];
+  const byKey = new Map<string, RhToolboxTool>();
+  for (const tool of tools) {
+    const key = rhToolboxDisplayIdentity(tool);
+    if (!byKey.has(key)) orderedKeys.push(key);
+    byKey.set(key, tool);
+  }
+  return orderedKeys.map((key) => byKey.get(key)).filter(Boolean) as RhToolboxTool[];
+}
+
 function mediaMentionsForKey(value: unknown): MediaMention[] {
   return Array.isArray(value) ? (value as MediaMention[]) : [];
 }
@@ -108,7 +133,7 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
 
   const [manifest, setManifest] = useState(() => normalizeRhToolboxManifest(getRhToolboxManifest()));
   const allTools = useMemo(
-    () => listRhToolboxTools(manifest, { includeDisabled: true }).filter(toolMatchesNodeSurface),
+    () => dedupeRhToolboxDisplayTools(listRhToolboxTools(manifest, { includeDisabled: true }).filter(toolMatchesNodeSurface)),
     [manifest],
   );
   const enabledTools = useMemo(
@@ -123,9 +148,9 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
   const categoryId = d.rhToolboxCategoryId || RH_TOOLBOX_ALL_CATEGORY_ID;
   const query = d.rhToolboxSearchQuery || '';
   const activeToolId = d.rhToolboxActiveToolId || '';
-  const activeTool = enabledTools.find((tool) => tool.id === activeToolId);
+  const baseActiveTool = enabledTools.find((tool) => tool.id === activeToolId);
   const status = d.status || 'idle';
-  const isBusy = status === 'submitting' || status === 'polling';
+  const remoteBusy = status === 'submitting' || status === 'polling';
   const urls: string[] = Array.isArray(d.urls) ? d.urls : [];
   const imageUrls: string[] = Array.isArray(d.imageUrls) ? d.imageUrls : (d.imageUrl ? [d.imageUrl] : []);
   const videoUrls: string[] = Array.isArray(d.videoUrls) ? d.videoUrls : (d.videoUrl ? [d.videoUrl] : []);
@@ -141,7 +166,52 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
   const [progressMessage, setProgressMessage] = useState('');
   const [hoveredToolId, setHoveredToolId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const activeTaskIdRef = useRef<string>(d.taskId ? String(d.taskId) : '');
+  const stopRequestedRef = useRef(false);
+  const cancelInFlightRef = useRef(false);
+  const [cancelling, setCancelling] = useState(false);
+  const isBusy = remoteBusy || cancelling;
+  const runCancelSeq = useRunBusStore((s) => s.cancelSeq);
+  const runCancelTargets = useRunBusStore((s) => s.cancelTargets);
+  const lastRunCancelSeqRef = useRef(runCancelSeq);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [activeToolAppInfo, setActiveToolAppInfo] = useState<any>(null);
+  const activeToolAppInfoFields = useMemo(
+    () => (Array.isArray(activeToolAppInfo?.nodeInfoList) ? activeToolAppInfo.nodeInfoList : []),
+    [activeToolAppInfo],
+  );
+  const activeTool = useMemo(() => {
+    if (!baseActiveTool) return undefined;
+    if (!activeToolAppInfoFields.length) return baseActiveTool;
+    const enrichedParams = (baseActiveTool.userParams || []).map((param) => {
+      const matchedField = activeToolAppInfoFields.find((field: any) => (
+        getRhToolboxNodeInfoFieldNodeId(field) === String(param.rhNodeId || '').trim().replace(/^#/, '')
+        && getRhToolboxNodeInfoFieldName(field) === String(param.fieldName || '').trim()
+      ));
+      const label = matchedField ? getRhToolboxNodeInfoFieldLabel(matchedField) : '';
+      const options = matchedField && param.kind === 'select' ? getRhToolboxNodeInfoFieldOptions(matchedField) : undefined;
+      const shouldPatchLabel = !!label
+        && label !== param.label
+        && (!param.label || param.label === param.fieldName || param.label === param.key || param.label === 'value');
+      const shouldPatchOptions = param.kind === 'select' && (!param.options?.length) && !!options?.length;
+      if (!shouldPatchLabel && !shouldPatchOptions) return param;
+      return {
+        ...param,
+        ...(shouldPatchLabel ? { label } : {}),
+        ...(shouldPatchOptions ? { options } : {}),
+      };
+    });
+    const inferredParams = inferRhToolboxUserParamsFromNodeInfoList(activeToolAppInfoFields, [
+      ...(baseActiveTool.inputSchema || []),
+      ...enrichedParams,
+      ...(baseActiveTool.fixedParams || []),
+    ]);
+    if (enrichedParams === baseActiveTool.userParams && inferredParams.length === 0) return baseActiveTool;
+    return {
+      ...baseActiveTool,
+      userParams: [...enrichedParams, ...inferredParams],
+    };
+  }, [activeToolAppInfoFields, baseActiveTool]);
 
   const initialSize = (d?.size && typeof d.size.w === 'number') ? d.size : { w: 360, h: 460 };
   const [size, setSize] = useState<{ w: number; h: number }>(initialSize);
@@ -197,6 +267,26 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
     };
   }, [activeToolId, update]);
 
+  useEffect(() => {
+    let disposed = false;
+    setActiveToolAppInfo(null);
+    if (!baseActiveTool?.webappId || baseActiveTool.runtime?.fetchAppInfo === false) return () => {
+      disposed = true;
+    };
+    fetchRhAppInfo(baseActiveTool.webappId)
+      .then((info) => {
+        if (disposed) return;
+        setActiveToolAppInfo(info);
+      })
+      .catch((error: any) => {
+        if (disposed) return;
+        logBus.debug(error?.message || '读取 RH NodeList 失败', `rh-toolbox:${id}`);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [baseActiveTool?.id, baseActiveTool?.runtime?.fetchAppInfo, baseActiveTool?.webappId]);
+
   const upstream = useUpstreamMaterials(id);
   const excludedMaterialIds = useMemo(
     () => normalizeExcludedMaterialIds(d?.excludedMaterialIds),
@@ -245,11 +335,11 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
     [categoriesForMajor, categoryId],
   );
   const filteredTools = useMemo(
-    () => filterRhToolboxTools(manifest, {
+    () => dedupeRhToolboxDisplayTools(filterRhToolboxTools(manifest, {
       majorCategoryId,
       categoryId: visibleCategoryId,
       query,
-    }).filter(toolMatchesNodeSurface),
+    }).filter(toolMatchesNodeSurface)),
     [manifest, majorCategoryId, visibleCategoryId, query],
   );
   const previewTool = useMemo(
@@ -503,6 +593,7 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
     abortRef.current?.abort();
     const aborter = new AbortController();
     abortRef.current = aborter;
+    activeTaskIdRef.current = '';
     setProgressMessage('准备运行...');
     update({
       status: 'submitting',
@@ -521,13 +612,22 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
     try {
       const explicitInputValues = collectExplicitInputValues();
       const resolvedUserParams = collectResolvedUserParams();
+      const runManifest = normalizeRhToolboxManifest({
+        ...manifest,
+        tools: manifest.tools.map((tool) => (tool.id === activeTool.id ? activeTool : tool)),
+      });
       const onProgress = (progress: RunRhToolboxProgress) => {
         setProgressMessage(progress.message);
-        if (progress.taskId) update({ status: progress.stage === 'poll' ? 'polling' : 'submitting', taskId: progress.taskId });
+        if (progress.taskId) activeTaskIdRef.current = progress.taskId;
+        if (progress.taskId && progress.stage !== 'cancel') update({ status: progress.stage === 'poll' ? 'polling' : 'submitting', taskId: progress.taskId });
+        if (progress.taskId && stopRequestedRef.current) {
+          void handleStop();
+        }
       };
       const result = await runRhToolboxTool({
         toolId: activeTool.id,
-        manifest,
+        manifest: runManifest,
+        appInfo: activeToolAppInfo,
         inputs: {
           texts: orderedTexts.map((m) => m.url),
           images: orderedImages.map((m) => m.url),
@@ -542,6 +642,7 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
       });
       const textOutputs = result.textOutputs.filter(Boolean);
       const textValue = textOutputs.join('\n\n');
+      activeTaskIdRef.current = '';
       update({
         status: 'success',
         taskId: result.taskId,
@@ -566,6 +667,24 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
       logBus.success(`${activeTool.title} 完成 · ${result.urls.length} 个输出`, source);
     } catch (error: any) {
       const message = error?.message || 'RH工具箱运行失败';
+      if (aborter.signal.aborted && !/取消 RH 后台任务失败/.test(message)) {
+        activeTaskIdRef.current = '';
+        stopRequestedRef.current = false;
+        update({ status: 'idle', error: '', taskId: '' });
+        setProgressMessage('已停止');
+        logBus.warn(`${activeTool.title} 已停止`, source);
+        return;
+      }
+      if (/取消 RH 后台任务失败/.test(message)) {
+        const tid = activeTaskIdRef.current || String(d.taskId || '');
+        stopRequestedRef.current = false;
+        update({ status: tid ? 'polling' : 'error', taskId: tid, error: message });
+        setProgressMessage(message);
+        logBus.error(message, source);
+        return;
+      }
+      activeTaskIdRef.current = '';
+      stopRequestedRef.current = false;
       update({ status: 'error', error: message });
       setProgressMessage('');
       logBus.error(message, source);
@@ -573,12 +692,50 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
     }
   };
 
-  const handleStop = () => {
-    abortRef.current?.abort();
-    abortRef.current = null;
-    update({ status: 'idle', error: '', taskId: '' });
-    setProgressMessage('已停止');
+  const handleStop = async () => {
+    stopRequestedRef.current = true;
+    const tid = String(activeTaskIdRef.current || d.taskId || '').trim();
+    const source = `rh-toolbox:${id}`;
+    if (!tid) {
+      setProgressMessage('等待 RH taskId，拿到后会立即取消后台任务');
+      update({ error: '正在等待 RH taskId，拿到后会立即取消后台任务' });
+      logBus.warn('用户主动停止：等待 RH 返回 taskId 后再取消后台任务', source);
+      return;
+    }
+    if (cancelInFlightRef.current) return;
+    cancelInFlightRef.current = true;
+    setCancelling(true);
+    setProgressMessage('正在请求取消 RH 后台任务...');
+    update({ taskId: tid, error: '正在请求取消 RH 后台任务...' });
+    logBus.warn(`用户主动停止，正在请求取消 RH 后台任务 taskId=${tid}`, source);
+    try {
+      await cancelRh(tid);
+      logBus.success(`已请求取消 RH 后台任务 taskId=${tid}`, source);
+      abortRef.current?.abort();
+      abortRef.current = null;
+      activeTaskIdRef.current = '';
+      stopRequestedRef.current = false;
+      update({ status: 'idle', error: '', taskId: '' });
+      setProgressMessage('已停止');
+    } catch (error: any) {
+      const message = `取消 RH 后台任务失败：${error?.message || error}`;
+      logBus.error(message, source);
+      update({ status: remoteBusy ? status : 'polling', taskId: tid, error: message });
+      setProgressMessage(message);
+    } finally {
+      cancelInFlightRef.current = false;
+      setCancelling(false);
+    }
   };
+
+  useEffect(() => {
+    if (runCancelSeq === lastRunCancelSeqRef.current) return;
+    lastRunCancelSeqRef.current = runCancelSeq;
+    if (!runCancelTargets.includes(id)) return;
+    if (!isBusy && !d.taskId && !activeTaskIdRef.current) return;
+    handleStop();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runCancelSeq, runCancelTargets, id, isBusy, d.taskId]);
 
   useRunTrigger(id, async () => {
     if (isBusy) return;
@@ -704,7 +861,7 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
           <div className="h-full flex items-center justify-center text-[11px]" style={{ color: subText }}>无匹配工具</div>
         ) : (
           <div
-            className="rh-toolbox-app-grid grid grid-cols-2 gap-2"
+            className="rh-toolbox-app-grid grid grid-cols-1 gap-2"
             style={{
               '--rh-toolbox-app-bg': bg,
               '--rh-toolbox-app-hover-bg': surface,
@@ -722,7 +879,7 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
                   title={tool.description || tool.title}
                   className="nodrag rh-toolbox-app-button"
                 >
-                  <span className="min-w-0 truncate">{tool.title}</span>
+                  <span className="rh-toolbox-app-title">{tool.title}</span>
                 </button>
                 {import.meta.env.DEV && (
                   <button
@@ -1020,7 +1177,7 @@ const RHToolboxNode = ({ id, data, selected }: NodeProps) => {
 
           {isBusy ? (
             <button type="button" onClick={handleStop} className="nodrag w-full flex items-center justify-center gap-1.5 rounded py-2 text-xs font-bold" style={{ background: surface, color: text, border: `1px solid ${border}` }}>
-              <Square size={12} /> 停止
+              <Square size={12} /> {cancelling ? '取消中...' : '停止'}
             </button>
           ) : (
             <button type="button" onClick={() => { void handleRun().catch(() => undefined); }} className="nodrag w-full flex items-center justify-center gap-1.5 rounded py-2 text-xs font-bold" style={{ background: accent, color: isPixel ? 'var(--px-surface)' : '#001018', border: `1px solid ${accent}` }}>

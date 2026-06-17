@@ -1,5 +1,5 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Moon, Settings, Sun, Wifi, WifiOff, Sparkles, Cloud, ExternalLink, Copy, Check, Gift, Heart, Youtube, PlayCircle, Bell, Wand2, Globe, MessageCircle, CalendarDays, Rocket, Library, Palette, Skull, Sailboat, BookOpen, Shield, Crown } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Moon, Settings, Sun, Wifi, WifiOff, Sparkles, Cloud, ExternalLink, Copy, Check, Gift, Heart, Youtube, PlayCircle, Bell, Wand2, Globe, MessageCircle, CalendarDays, Rocket, Library, Palette, Skull, Sailboat, BookOpen, Shield, Crown, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useThemeStore } from './stores/theme';
 import { seedDragonBallRadarForShenronTest, useDragonBallRadarStore } from './stores/dragonBallRadar';
 import { seedSaintSeiyaGoldClothsForHadesTest, useSaintSeiyaSanctuaryStore } from './stores/saintSeiyaSanctuary';
@@ -46,6 +46,13 @@ function isShortcutTypingTarget(target: EventTarget | null): boolean {
     target.isContentEditable ||
     Boolean(target.closest('[contenteditable="true"]'))
   );
+}
+
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 't8-sidebar-collapsed';
+
+function readSidebarCollapsedPreference(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === '1';
 }
 
 function poseBackupToNodeData(value: unknown): Record<string, any> | null {
@@ -155,6 +162,16 @@ const CANVAS_TUTORIALS = [
     bilibili: 'https://www.bilibili.com/video/BV1N9Eg6QEHs/',
     youtube: 'https://www.youtube.com/watch?v=zIW7PbEWQAs',
   },
+  {
+    title: '教程第十一弹（新增圣斗士星矢双主题，加强本地comfyui节点和参数解析，修复不支持LIST的问题，新增画布内图片素材按鼠标左右键拖动到文件夹，新增Fal超市功能，新增grok agent节点，含创作台和简易版，新增3D素材上传和预览功能）',
+    bilibili: 'https://www.bilibili.com/video/BV1gGEz6VEDA/',
+    youtube: 'https://www.youtube.com/watch?v=oRT59Qf65KY',
+  },
+  {
+    title: '教程第十二弹（grok agent的节点修复图生视频功能，新增视频延展及视频编辑功能，新增codex cli agent节点，简约模式和创作台模式，新增Codex生图工作台节点，新增自定义快捷圆盘，FAL超市新增10多个新模型，视频节点新增3个grok video 1.5模型，解锁成就系统所有隐藏模式的奖励影片，新增俄罗斯方块主题及小游戏）',
+    bilibili: 'https://www.bilibili.com/video/BV1phJs6oE2g/',
+    youtube: 'https://www.youtube.com/watch?v=BKV8YA-kKK4',
+  },
 ];
 
 function InfiniteCanvasBootLoading() {
@@ -208,9 +225,14 @@ function App() {
   // 「AIX产品」推广浮层开关
   const [aixOpen, setAixOpen] = useState(false);
   const aixWrapRef = useRef<HTMLDivElement>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsedPreference);
   // 画布接收节点添加的 ref(从 Sidebar -> Canvas)
   const addNodeRef = useRef<AddNodeFn | null>(null);
   const insertWorkflowRef = useRef<InsertWorkflowFn | null>(null);
+
+  const toggleSidebarCollapsed = useCallback(() => {
+    setSidebarCollapsed((collapsed) => !collapsed);
+  }, []);
 
   // 「在线画布」浮层: 点击容器外部 / 按 ESC 自动关闭
   useEffect(() => {
@@ -444,6 +466,23 @@ function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [shortcuts]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, sidebarCollapsed ? '1' : '0');
+  }, [sidebarCollapsed]);
+
+  // 侧边栏快捷键：H 隐藏 / 恢复左侧栏。输入框内不拦截，避免影响 Prompt 和搜索。
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchesAnyShortcut(shortcuts['global.sidebar-toggle'], e)) return;
+      if (e.repeat) return;
+      if (isShortcutTypingTarget(e.target)) return;
+      e.preventDefault();
+      toggleSidebarCollapsed();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [shortcuts, toggleSidebarCollapsed]);
 
   const isDark = theme === 'dark';
   const isPixel = style === 'pixel';
@@ -1629,8 +1668,21 @@ function App() {
       </header>
 
       {/* 主体两栏布局 */}
-      <div className="flex-1 flex overflow-hidden">
-        <Sidebar onAddNode={handleAddNode} />
+      <div
+        className={`t8-main-layout flex-1 flex overflow-hidden relative${sidebarCollapsed ? ' t8-main-layout--sidebar-collapsed' : ''}`}
+        data-sidebar-collapsed={sidebarCollapsed ? 'true' : 'false'}
+      >
+        {!sidebarCollapsed && <Sidebar onAddNode={handleAddNode} />}
+        <button
+          type="button"
+          className={`t8-sidebar-toggle t8-mini-icon-button${sidebarCollapsed ? ' is-collapsed' : ''}`}
+          aria-label={sidebarCollapsed ? '显示侧边栏' : '隐藏侧边栏'}
+          title={sidebarCollapsed ? '显示侧边栏 (H)' : '隐藏侧边栏 (H)'}
+          aria-pressed={sidebarCollapsed}
+          onClick={toggleSidebarCollapsed}
+        >
+          {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
         <ErrorBoundary fallbackTitle="画布渲染出错了，已被错误边界捕获">
           <Suspense fallback={<InfiniteCanvasBootLoading />}>
             <Canvas onAddNodeRef={addNodeRef} onInsertWorkflowRef={insertWorkflowRef} />

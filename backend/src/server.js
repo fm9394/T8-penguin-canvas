@@ -64,11 +64,13 @@ const eagleRouter = require('./routes/eagle');
 const figmaRouter = require('./routes/figma');
 const externalProvidersRouter = require('./routes/externalProviders');
 const grokOAuthRouter = require('./routes/grokOAuth');
+const codexCliRouter = require('./routes/codexCli');
 const aiWatermarkRouter = require('./routes/aiWatermark');
 const cloudUploadsRouter = require('./routes/cloudUploads');
 const parseHubRouter = require('./routes/parseHub');
 const achievementsRouter = require('./routes/achievements');
 const topazRouter = require('./routes/topaz');
+const animeTagsRouter = require('./routes/animeTags');
 const { registerLocalExtensions } = require('./extensions/localExtensions');
 const localHooks = require('./extensions/runtimeHooks');
 
@@ -83,11 +85,13 @@ app.use('/api/themes', themesRouter);
 app.use('/api/eagle', eagleRouter);
 app.use('/api/figma', figmaRouter);
 app.use('/api/grok-oauth', grokOAuthRouter);
+app.use('/api/codex-cli', codexCliRouter);
 app.use('/api/ai-watermark', aiWatermarkRouter);
 app.use('/api/cloud-uploads', cloudUploadsRouter);
 app.use('/api/parsehub', parseHubRouter);
 app.use('/api/achievements', achievementsRouter);
 app.use('/api/topaz', topazRouter);
+app.use('/api/anime-tags', animeTagsRouter);
 registerLocalExtensions(app, { config, express, logger: console, hooks: localHooks });
 
 // ========== 前端静态资源(仅打包模式) ==========

@@ -2,6 +2,14 @@ export type FalToolboxMediaKind = 'text' | 'image' | 'video' | 'audio' | 'model3
 
 export type FalToolboxUserParamKind = 'text' | 'textarea' | 'number' | 'select' | 'boolean';
 
+export type FalToolboxUserParamConditionValue = string | number | boolean;
+
+export interface FalToolboxUserParamCondition {
+  key: string;
+  equals?: FalToolboxUserParamConditionValue | FalToolboxUserParamConditionValue[];
+  notEquals?: FalToolboxUserParamConditionValue | FalToolboxUserParamConditionValue[];
+}
+
 export interface FalToolboxCategory {
   id: string;
   name: string;
@@ -37,6 +45,8 @@ export interface FalToolboxUserParam {
   max?: number;
   step?: number;
   required?: boolean;
+  parseJson?: boolean;
+  when?: FalToolboxUserParamCondition;
 }
 
 export interface FalToolboxFixedParam {
@@ -137,13 +147,17 @@ const MODEL_RE = /\.(glb|gltf|obj|fbx|stl|usdz|zip)(\?|$)/i;
 export const FAL_TOOLBOX_CAPABILITY_LABELS: Record<string, string> = {
   'image.generate': '图像生成',
   'image.edit': '图像编辑',
+  'image.inpaint': '局部重绘',
   'image.upscale': '图像放大',
   'image.style': '图像风格',
   'video.generate': '视频生成',
+  'video.edit': '视频编辑',
   'video.image-to-video': '图生视频',
   'video.text-to-video': '文生视频',
+  'video.background-removal': '视频去背景',
   'audio.generate': '音频生成',
   'audio.tts': '语音合成',
+  'audio.asr': '语音转文字',
   'audio.music': '音乐生成',
   'model3d.generate': '3D 模型',
 };
@@ -201,6 +215,31 @@ function cleanCapabilities(value: unknown): string[] {
     out.push(capability);
   }
   return out;
+}
+
+function normalizeConditionValue(value: unknown): FalToolboxUserParamConditionValue | undefined {
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  return undefined;
+}
+
+function normalizeConditionValueList(value: unknown): FalToolboxUserParamConditionValue[] {
+  const values = Array.isArray(value) ? value : [value];
+  return values.map(normalizeConditionValue).filter((item): item is FalToolboxUserParamConditionValue => item !== undefined);
+}
+
+function normalizeUserParamCondition(value: unknown): FalToolboxUserParamCondition | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const key = cleanId(raw.key, '');
+  if (!key) return undefined;
+  const equals = normalizeConditionValueList(raw.equals);
+  const notEquals = normalizeConditionValueList(raw.notEquals);
+  if (!equals.length && !notEquals.length) return undefined;
+  return {
+    key,
+    ...(equals.length ? { equals: equals.length === 1 ? equals[0] : equals } : {}),
+    ...(notEquals.length ? { notEquals: notEquals.length === 1 ? notEquals[0] : notEquals } : {}),
+  };
 }
 
 function sortByOrderThenTitle<T extends { order?: number; title?: string; name?: string; id: string }>(items: T[]): T[] {
@@ -283,6 +322,8 @@ export function normalizeFalToolboxManifest(manifest: Partial<FalToolboxManifest
           max: Number.isFinite(param?.max) ? Number(param.max) : undefined,
           step: Number.isFinite(param?.step) ? Number(param.step) : undefined,
           required: param?.required === true,
+          parseJson: param?.parseJson === true,
+          when: normalizeUserParamCondition(param?.when),
         }))
       : [];
     const outputSchema: FalToolboxOutputMapping[] = Array.isArray(raw?.outputSchema)
@@ -432,6 +473,43 @@ function isOmittedParamValue(value: unknown, omitValues?: Array<string | number 
   return omitValues.some((item) => String(item) === String(value));
 }
 
+function getUserParamControlValue(
+  params: FalToolboxUserParam[] | undefined,
+  values: Record<string, string | number | boolean> | undefined,
+  key: string,
+): unknown {
+  const param = (params || []).find((item) => item.key === key);
+  return values?.[key] ?? param?.defaultValue;
+}
+
+function conditionValuesMatch(actual: unknown, expected: FalToolboxUserParamConditionValue | FalToolboxUserParamConditionValue[]): boolean {
+  const expectedValues = Array.isArray(expected) ? expected : [expected];
+  return expectedValues.some((item) => String(actual) === String(item));
+}
+
+function userParamConditionMatches(
+  condition: FalToolboxUserParamCondition | undefined,
+  params: FalToolboxUserParam[] | undefined,
+  values: Record<string, string | number | boolean> | undefined,
+): boolean {
+  if (!condition) return true;
+  const actual = getUserParamControlValue(params, values, condition.key);
+  if (condition.equals !== undefined && !conditionValuesMatch(actual, condition.equals)) return false;
+  if (condition.notEquals !== undefined && conditionValuesMatch(actual, condition.notEquals)) return false;
+  return true;
+}
+
+function parseJsonParamValue(param: FalToolboxUserParam, value: unknown): unknown {
+  if (param.parseJson !== true || typeof value !== 'string') return value;
+  const raw = value.trim();
+  if (!raw) return value;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`${param.label || param.key} 不是有效 JSON`);
+  }
+}
+
 export function buildFalToolboxRunPayload(
   tool: FalToolboxTool,
   options: {
@@ -457,9 +535,10 @@ export function buildFalToolboxRunPayload(
   }
 
   for (const param of tool.userParams || []) {
+    if (!userParamConditionMatches(param.when, tool.userParams, options.userParamValues)) continue;
     const value = options.userParamValues?.[param.key] ?? param.defaultValue;
     if (isOmittedParamValue(value, param.omitValues)) continue;
-    if (hasValue(value) || param.kind === 'boolean') setPayloadValue(payload, param.payloadKey || param.key, value ?? '');
+    if (hasValue(value) || param.kind === 'boolean') setPayloadValue(payload, param.payloadKey || param.key, parseJsonParamValue(param, value ?? ''));
   }
 
   for (const fixed of tool.fixedParams || []) {
